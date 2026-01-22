@@ -4,9 +4,6 @@ import pandas as pd
 import numpy as np
 import ta
 from datetime import datetime, timedelta
-import requests
-import json
-import pywencai
 from data_source_manager import data_source_manager
 
 class StockDataFetcher:

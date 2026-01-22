@@ -1659,6 +1659,12 @@ def show_example_interface():
 
 def display_history_records():
     """显示历史分析记录"""
+    
+    # 检查是否要查看详情
+    if 'viewing_record_id' in st.session_state:
+        display_record_detail(st.session_state.viewing_record_id)
+        return
+    
     st.subheader("📚 历史分析记录")
 
     # 获取所有记录
@@ -1720,6 +1726,7 @@ def display_history_records():
             with col3:
                 if st.button("👀 查看详情", key=f"view_{record['id']}"):
                     st.session_state.viewing_record_id = record['id']
+                    st.rerun()
 
             with col4:
                 if st.button("➕ 监测", key=f"add_monitor_{record['id']}"):
@@ -1735,10 +1742,6 @@ def display_history_records():
                         st.rerun()
                     else:
                         st.error("❌ 删除失败")
-
-    # 查看详细记录
-    if 'viewing_record_id' in st.session_state:
-        display_record_detail(st.session_state.viewing_record_id)
 
 def display_add_to_monitor_dialog(record):
     """显示加入监测的对话框"""
