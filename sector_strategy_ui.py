@@ -733,7 +733,7 @@ def display_visualizations(predictions):
                      title='板块多空信心度对比')
         
         fig.update_layout(height=400)
-    st.plotly_chart(fig, use_container_width=True, config={'responsive': True}, key="sector_confidence")
+    st.plotly_chart(fig, width='stretch', config={'responsive': True}, key="sector_confidence")
     
     st.markdown("---")
     
@@ -770,7 +770,7 @@ def display_visualizations(predictions):
                         title='板块热度分布图')
         
         fig.update_layout(height=400)
-    st.plotly_chart(fig, use_container_width=True, config={'responsive': True}, key="sector_heat")
+    st.plotly_chart(fig, width='stretch', config={'responsive': True}, key="sector_heat")
 
 
 def display_pdf_export_section(result):

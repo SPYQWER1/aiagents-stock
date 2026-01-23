@@ -524,7 +524,12 @@ class StockDataFetcher:
         try:
             if isinstance(df, dict) and "error" in df:
                 return df
-                
+            
+            # 过滤非交易日数据（剔除周末和法定节假日）
+            # 非交易日的Volume为0或NaN，直接过滤这些行
+            if 'Volume' in df.columns:
+                df = df[(df['Volume'] > 0) & (df['Volume'].notna())]
+            
             # 移动平均线
             df['MA5'] = ta.trend.sma_indicator(df['Close'], window=5)
             df['MA10'] = ta.trend.sma_indicator(df['Close'], window=10)

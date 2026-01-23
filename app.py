@@ -1400,6 +1400,10 @@ def display_stock_chart(stock_data, stock_info):
     """显示股票图表"""
     st.subheader("📈 股价走势图")
 
+    # 过滤非交易日数据（剔除Volume为0或NaN的记录）
+    if 'Volume' in stock_data.columns:
+        stock_data = stock_data[(stock_data['Volume'] > 0) & (stock_data['Volume'].notna())]
+
     # 创建蜡烛图
     fig = go.Figure()
 
@@ -1460,12 +1464,15 @@ def display_stock_chart(stock_data, stock_info):
         xaxis_title="日期",
         yaxis_title="价格",
         height=500,
-        showlegend=True
+        showlegend=True,
+        xaxis_rangebreaks=[
+            dict(bounds=["sat", "mon"]),  # 隐藏周六和周日
+        ]
     )
 
     # 生成唯一的key
     chart_key = f"main_stock_chart_{stock_info.get('symbol', 'unknown')}_{int(time.time())}"
-    st.plotly_chart(fig, use_container_width=True, config={'responsive': True}, key=chart_key)
+    st.plotly_chart(fig, width='stretch', config={'responsive': True}, key=chart_key)
 
     # 成交量图
     if 'Volume' in stock_data.columns:
@@ -1481,12 +1488,15 @@ def display_stock_chart(stock_data, stock_info):
             title="成交量",
             xaxis_title="日期",
             yaxis_title="成交量",
-            height=200
+            height=200,
+            xaxis_rangebreaks=[
+                dict(bounds=["sat", "mon"]),  # 隐藏周六和周日
+            ]
         )
 
         # 生成唯一的key
         volume_key = f"volume_chart_{stock_info.get('symbol', 'unknown')}_{int(time.time())}"
-        st.plotly_chart(fig_volume, use_container_width=True, config={'responsive': True}, key=volume_key)
+        st.plotly_chart(fig_volume, width='stretch', config={'responsive': True}, key=volume_key)
 
 def display_agents_analysis(agents_results):
     """显示各分析师报告"""
