@@ -6,6 +6,7 @@
 """
 
 import logging
+import os
 import sqlite3
 from datetime import datetime
 from typing import Dict, List, Tuple
@@ -14,7 +15,7 @@ from typing import Dict, List, Tuple
 class ProfitGrowthMonitor:
     """净利增长策略监控数据库管理"""
 
-    def __init__(self, db_path: str = "profit_growth_monitor.db"):
+    def __init__(self, db_path: str = os.path.join("database_files", "profit_growth_monitor.db")):
         """
         初始化监控数据库
 
@@ -22,6 +23,9 @@ class ProfitGrowthMonitor:
             db_path: 数据库文件路径
         """
         self.db_path = db_path
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
         self.logger = logging.getLogger(__name__)
         self._init_database()
 

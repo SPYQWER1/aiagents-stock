@@ -1,0 +1,2 @@
+1.使用python的streamlit框架构建web应用
+2.需提供完善的注释，包括函数、类、模块等的注释，注释需符合python的docstring规范

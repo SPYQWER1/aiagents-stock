@@ -4,6 +4,7 @@
 """
 
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
@@ -16,7 +17,7 @@ from aiagents_stock.features.longhubang.longhubang_scoring import LonghubangScor
 class LonghubangEngine:
     """龙虎榜综合分析引擎"""
 
-    def __init__(self, model="deepseek-chat", db_path="longhubang.db"):
+    def __init__(self, model="deepseek-chat", db_path=os.path.join("database_files", "longhubang.db")):
         """
         初始化分析引擎
 

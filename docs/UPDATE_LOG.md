@@ -145,7 +145,7 @@ TDX_BASE_URL=http://192.168.1.222:8181
 - `smart_monitor_tdx_data.py` - TDX数据获取模块（441行）
 
 **配置文件：**
-- `env_example.txt` - 环境变量配置示例
+- `.env.example` - 环境变量配置示例
 - `config.py` - 新增TDX配置项
 
 **文档：**

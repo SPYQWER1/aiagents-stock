@@ -6,6 +6,7 @@
 """
 
 import logging
+import os
 import sqlite3
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
@@ -16,7 +17,7 @@ import pandas as pd
 class LowPriceBullMonitor:
     """低价擒牛策略监控器"""
 
-    def __init__(self, db_path: str = "low_price_bull_monitor.db"):
+    def __init__(self, db_path: str = os.path.join("database_files", "low_price_bull_monitor.db")):
         """
         初始化监控器
 
@@ -25,6 +26,9 @@ class LowPriceBullMonitor:
         """
         self.logger = logging.getLogger(__name__)
         self.db_path = db_path
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
         self._init_database()
 
     def _init_database(self):

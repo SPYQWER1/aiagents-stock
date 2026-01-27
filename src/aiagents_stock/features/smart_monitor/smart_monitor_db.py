@@ -5,6 +5,7 @@
 
 import json
 import logging
+import os
 import sqlite3
 from datetime import datetime
 from typing import Dict, List
@@ -13,7 +14,7 @@ from typing import Dict, List
 class SmartMonitorDB:
     """智能盯盘数据库"""
 
-    def __init__(self, db_file: str = "smart_monitor.db"):
+    def __init__(self, db_file: str = os.path.join("database_files", "smart_monitor.db")):
         """
         初始化数据库
 
@@ -21,6 +22,9 @@ class SmartMonitorDB:
             db_file: 数据库文件路径
         """
         self.db_file = db_file
+        db_dir = os.path.dirname(self.db_file)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
         self.logger = logging.getLogger(__name__)
         self._init_database()
 
@@ -652,7 +656,7 @@ if __name__ == "__main__":
     # 测试数据库
     logging.basicConfig(level=logging.INFO)
 
-    db = SmartMonitorDB("test_smart_monitor.db")
+    db = SmartMonitorDB(os.path.join("database_files", "test_smart_monitor.db"))
 
     # 测试添加监控任务
     task_id = db.add_monitor_task(

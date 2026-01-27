@@ -5,6 +5,7 @@
 
 import json
 import logging
+import os
 import sqlite3
 from datetime import datetime
 
@@ -14,7 +15,7 @@ import pandas as pd
 class SectorStrategyDatabase:
     """智策板块数据库管理类"""
 
-    def __init__(self, db_path="sector_strategy.db"):
+    def __init__(self, db_path=os.path.join("database_files", "sector_strategy.db")):
         """
         初始化数据库
 
@@ -22,6 +23,9 @@ class SectorStrategyDatabase:
             db_path: 数据库文件路径
         """
         self.db_path = db_path
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
         # 初始化日志
         self.logger = logging.getLogger(__name__)
         if not self.logger.handlers:

@@ -46,7 +46,7 @@ Thumbs.db
 
 # 文档和说明（这些会被COPY进去，这里只是示例）
 # README.md
-# *.md
+*.md
 
 # 缓存
 .pytest_cache/

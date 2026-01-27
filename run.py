@@ -4,6 +4,7 @@ AI股票分析系统启动脚本
 运行命令: python run.py
 """
 
+import os
 import subprocess
 import sys
 from importlib.util import find_spec
@@ -63,6 +64,9 @@ def main():
     print("=" * 50)
 
     try:
+        os.environ.setdefault("NODE_NO_WARNINGS", "1")
+        env = os.environ.copy()
+        env.setdefault("NODE_NO_WARNINGS", "1")
         subprocess.run(
             [
                 sys.executable,
@@ -74,7 +78,8 @@ def main():
                 "8503",
                 "--server.address",
                 "127.0.0.1",
-            ]
+            ],
+            env=env,
         )
     except KeyboardInterrupt:
         print("\n👋 感谢使用AI股票分析系统！")

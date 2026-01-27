@@ -4,12 +4,13 @@
 提供持仓股票和分析历史的数据库操作接口
 """
 
+import os
 import sqlite3
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 # 数据库文件路径
-DB_PATH = "portfolio_stocks.db"
+DB_PATH = os.path.join("database_files", "portfolio_stocks.db")
 
 
 class PortfolioDB:
@@ -23,6 +24,9 @@ class PortfolioDB:
             db_path: 数据库文件路径
         """
         self.db_path = db_path
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
         self._init_database()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -633,7 +637,7 @@ if __name__ == "__main__":
     print("=" * 50)
 
     # 初始化数据库
-    db = PortfolioDB("test_portfolio.db")
+    db = PortfolioDB(os.path.join("database_files", "test_portfolio.db"))
 
     # 测试添加股票
     try:

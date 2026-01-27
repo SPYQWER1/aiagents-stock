@@ -5,6 +5,7 @@
 
 import json
 import logging
+import os
 import sqlite3
 from datetime import datetime
 
@@ -14,7 +15,7 @@ import pandas as pd
 class LonghubangDatabase:
     """龙虎榜数据库管理类"""
 
-    def __init__(self, db_path="longhubang.db"):
+    def __init__(self, db_path=os.path.join("database_files", "longhubang.db")):
         """
         初始化数据库
 
@@ -22,6 +23,9 @@ class LonghubangDatabase:
             db_path: 数据库文件路径
         """
         self.db_path = db_path
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
         # 初始化日志
         self.logger = logging.getLogger(__name__)
         if not self.logger.handlers:
@@ -516,7 +520,7 @@ if __name__ == "__main__":
     print("测试智瞰龙虎数据库模块")
     print("=" * 60)
 
-    db = LonghubangDatabase("test_longhubang.db")
+    db = LonghubangDatabase(os.path.join("database_files", "test_longhubang.db"))
 
     # 测试数据
     test_data = [
