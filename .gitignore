@@ -4,7 +4,22 @@
 /test_pdf_export.py
 /test_pe_pb.py
 /venv
-/__pycache__
+/.venv
+**/__pycache__/
+*.py[cod]
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*.sqlite
+*.sqlite3
+*.db
+*.dmp
+*.dump
+*.pid
+*.lock
+*.DS_Store
 # 环境变量文件
 .env
 /.cursor
@@ -12,4 +27,4 @@
 TradEnv/
 
 env_example.txt
-stock_analysis.db
+risk_data_debug_output.txt
