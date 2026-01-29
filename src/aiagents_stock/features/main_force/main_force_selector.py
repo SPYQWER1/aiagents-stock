@@ -2,7 +2,21 @@
 # -*- coding: utf-8 -*-
 """
 主力选股模块
-使用pywencai获取主力资金净流入前100名股票，并进行智能筛选
+
+该模块用于获取和筛选主力资金净流入排名靠前的股票，主要功能包括：
+1. 从pywencai获取指定时间范围内主力资金净流入排名前100名的股票
+2. 基于涨跌幅、市值等条件进行智能筛选
+3. 提取主力资金净流入前N名的股票
+4. 格式化股票数据，准备提交给AI分析师
+5. 打印股票摘要信息
+
+使用方法：
+- 创建MainForceStockSelector实例
+- 调用get_main_force_stocks获取原始数据
+- 调用filter_stocks进行智能筛选
+- 调用get_top_stocks获取排名靠前的股票
+- 调用format_stock_list_for_analysis格式化数据
+- 调用print_stock_summary打印摘要信息
 """
 
 import time
@@ -14,26 +28,38 @@ import pywencai
 
 
 class MainForceStockSelector:
-    """主力选股类"""
+    """主力选股类
+    
+    该类提供了获取和筛选主力资金净流入股票的功能，支持多方案查询、智能筛选和数据格式化。
+    
+    属性:
+        raw_data (pd.DataFrame): 原始股票数据
+        filtered_stocks (pd.DataFrame): 筛选后的股票数据
+    """
 
     def __init__(self):
+        """初始化主力选股器
+        
+        初始化类的属性，设置原始数据和筛选后数据为None。
+        """
         self.raw_data = None
         self.filtered_stocks = None
 
-    def get_main_force_stocks(
-        self, start_date: str = None, days_ago: int = None, min_market_cap: float = None, max_market_cap: float = None
-    ) -> Tuple[bool, pd.DataFrame, str]:
+    def get_main_force_stocks(self, start_date: str = None, days_ago: int = None, min_market_cap: float = None, max_market_cap: float = None ) -> Tuple[bool, pd.DataFrame, str]:
         """
         获取主力资金净流入前100名股票
+
+        该方法通过pywencai获取指定时间范围内主力资金净流入排名靠前的股票，
+        支持多种查询方案，确保在不同情况下都能获取到有效数据。
 
         Args:
             start_date: 开始日期，格式如"2025年10月1日"，如果不提供则使用days_ago
             days_ago: 距今多少天
-            min_market_cap: 最小市值限制
-            max_market_cap: 最大市值限制
+            min_market_cap: 最小市值限制（单位：亿）
+            max_market_cap: 最大市值限制（单位：亿）
 
         Returns:
-            (success, dataframe, message)
+            (success, dataframe, message): 包含操作是否成功、股票数据DataFrame和相关消息的元组
         """
         try:
             # 如果没有提供开始日期，根据days_ago计算
@@ -112,7 +138,18 @@ class MainForceStockSelector:
             return False, None, error_msg
 
     def _convert_to_dataframe(self, result) -> pd.DataFrame:
-        """转换问财返回结果为DataFrame"""
+        """
+        转换问财返回结果为DataFrame
+        
+        该方法处理pywencai返回的不同格式数据，包括DataFrame、字典和列表，
+        确保返回标准的DataFrame格式。
+        
+        Args:
+            result: pywencai返回的原始数据，可以是DataFrame、字典或列表
+            
+        Returns:
+            pd.DataFrame: 转换后的DataFrame，如果转换失败返回None
+        """
         try:
             if isinstance(result, pd.DataFrame):
                 return result
@@ -144,14 +181,17 @@ class MainForceStockSelector:
         """
         智能筛选股票 - 基于涨跌幅和市值
 
+        该方法对股票数据进行多维度筛选，包括涨跌幅限制和市值范围限制，
+        支持智能匹配数据列名，确保在不同数据格式下都能正确筛选。
+
         Args:
             df: 原始股票数据DataFrame
-            max_range_change: 最大涨跌幅限制
-            min_market_cap: 最小市值限制
-            max_market_cap: 最大市值限制
+            max_range_change: 最大涨跌幅限制（单位：%）
+            min_market_cap: 最小市值限制（单位：亿）
+            max_market_cap: 最大市值限制（单位：亿）
 
         Returns:
-            筛选后的DataFrame
+            pd.DataFrame: 筛选后的股票数据DataFrame
         """
         if df is None or df.empty:
             return df
@@ -285,11 +325,15 @@ class MainForceStockSelector:
         """
         格式化股票列表，准备提交给AI分析师
 
+        该方法将股票数据DataFrame转换为结构化的字典列表，提取关键信息，
+        包括股票基本信息、涨跌幅、主力资金和各种评分数据，
+        方便后续的AI分析和处理。
+
         Args:
             df: 股票数据DataFrame
 
         Returns:
-            格式化后的股票列表
+            List[Dict]: 格式化后的股票信息字典列表
         """
         if df is None or df.empty:
             return []
@@ -362,7 +406,16 @@ class MainForceStockSelector:
         return stock_list
 
     def print_stock_summary(self, stock_list: List[Dict]):
-        """打印股票摘要信息"""
+        """
+        打印股票摘要信息
+
+        该方法将格式化后的股票列表以表格形式打印到控制台，
+        显示股票的基本信息、行业、主力资金和涨跌幅等关键数据，
+        方便用户快速了解股票概况。
+
+        Args:
+            stock_list: 格式化后的股票信息字典列表
+        """
         print(f"\n{'='*80}")
         print(f"📊 候选股票列表 ({len(stock_list)}只)")
         print(f"{'='*80}")

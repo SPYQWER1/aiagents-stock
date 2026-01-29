@@ -17,13 +17,7 @@ class DeepSeekClient:
             base_url=config.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
         )
 
-    def call_api(
-        self,
-        messages: List[Dict[str, str]],
-        model: Optional[str] = None,
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
-    ) -> str:
+    def call_api(self,messages: List[Dict[str, str]],model: Optional[str] = None,temperature: float = 0.7,max_tokens: int = 2000,) -> str:
         """调用DeepSeek API"""
         # 使用实例的模型，如果没有传入则使用默认模型
         model_to_use = model or self.model

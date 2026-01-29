@@ -19,7 +19,19 @@ class StockDataFetcher:
         self.data_source_manager = data_source_manager
 
     def get_stock_info(self, symbol):
-        """获取股票基本信息"""
+        """
+        获取股票基本信息
+
+        该方法根据股票代码判断股票类型（中国A股、港股、美股），
+        并调用相应的方法获取股票的基本信息，包括名称、价格、涨跌幅、
+        市盈率、市净率、市值等关键数据。
+
+        Args:
+            symbol: 股票代码
+
+        Returns:
+            dict: 包含股票基本信息的字典，失败时返回包含error键的字典
+        """
         try:
             # 处理中国A股
             if self._is_chinese_stock(symbol):
@@ -34,7 +46,20 @@ class StockDataFetcher:
             return {"error": f"获取股票信息失败: {str(e)}"}
 
     def get_stock_data(self, symbol, period="1y", interval="1d"):
-        """获取股票历史数据"""
+        """
+        获取股票历史数据
+
+        该方法根据股票代码判断股票类型，并调用相应的方法获取股票的历史数据，
+        包括开盘价、收盘价、最高价、最低价、成交量等信息。
+
+        Args:
+            symbol: 股票代码
+            period: 时间周期，默认为"1y"（1年）
+            interval: 时间间隔，默认为"1d"（日线）
+
+        Returns:
+            pd.DataFrame: 包含股票历史数据的DataFrame，失败时返回包含error键的字典
+        """
         try:
             if self._is_chinese_stock(symbol):
                 return self._get_chinese_stock_data(symbol, period)
@@ -528,7 +553,18 @@ class StockDataFetcher:
             return {"error": f"获取美股数据失败: {str(e)}"}
 
     def calculate_technical_indicators(self, df):
-        """计算技术指标"""
+        """
+        计算技术指标
+
+        该方法对股票历史数据计算多种技术指标，包括移动平均线、RSI、MACD、
+        布林带、KDJ等，用于后续的技术分析和策略制定。
+
+        Args:
+            df: 股票历史数据DataFrame
+
+        Returns:
+            pd.DataFrame: 包含技术指标的DataFrame，失败时返回包含error键的字典
+        """
         try:
             if isinstance(df, dict) and "error" in df:
                 return df
@@ -573,7 +609,19 @@ class StockDataFetcher:
             return {"error": f"计算技术指标失败: {str(e)}"}
 
     def get_latest_indicators(self, df):
-        """获取最新的技术指标值"""
+        """
+        获取当前的技术指标值
+
+        该方法从计算了技术指标的DataFrame中提取最新的指标值，
+        包括价格、移动平均线、RSI、MACD、布林带、KDJ等，
+        用于快速了解股票的当前技术状态。
+
+        Args:
+            df: 包含技术指标的DataFrame
+
+        Returns:
+            dict: 包含最新技术指标值的字典，失败时返回包含error键的字典
+        """
         try:
             if isinstance(df, dict) and "error" in df:
                 return df
@@ -596,10 +644,22 @@ class StockDataFetcher:
                 "volume_ratio": latest["Volume_ratio"],
             }
         except Exception as e:
-            return {"error": f"获取最新指标失败: {str(e)}"}
+            return {"error": f"获取当前指标失败: {str(e)}"}
 
     def get_financial_data(self, symbol):
-        """获取详细财务数据"""
+        """
+        获取详细财务数据
+
+        该方法根据股票代码判断股票类型，并调用相应的方法获取股票的财务数据，
+        包括资产负债表、利润表、现金流量表和财务比率等详细信息，
+        用于基本面分析和价值评估。
+
+        Args:
+            symbol: 股票代码
+
+        Returns:
+            dict: 包含财务数据的字典，失败时返回包含error键的字典
+        """
         try:
             if self._is_chinese_stock(symbol):
                 return self._get_chinese_financial_data(symbol)

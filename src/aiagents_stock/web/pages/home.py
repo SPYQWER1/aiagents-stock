@@ -47,7 +47,7 @@ def render_header() -> None:
         """
     <div class="top-nav">
         <h1 class="nav-title">📈 复合多AI智能体股票团队分析系统</h1>
-        <p class="nav-subtitle">基于DeepSeek的专业量化投资分析平台 | Multi-Agent Stock Analysis System</p>
+        <p class="nav-subtitle">投资分析平台 | Multi-Agent Stock Analysis System</p>
     </div>
     """,
         unsafe_allow_html=True,
@@ -63,7 +63,6 @@ def _render_mode_and_inputs() -> tuple[str, str, bool, str]:
             "分析模式",
             ["单个分析", "批量分析"],
             horizontal=True,
-            help="单个分析：分析单只股票；批量分析：同时分析多只股票",
         )
 
     batch_mode = st.session_state.get("batch_mode", "顺序分析")
@@ -83,7 +82,7 @@ def _render_mode_and_inputs() -> tuple[str, str, bool, str]:
         col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
             stock_input = st.text_input(
-                "🔍 请输入股票代码或名称",
+                "🔍 请输入股票代码",
                 placeholder="例如: AAPL, 000001, 00700",
                 help="支持A股(如000001)、港股(如00700)和美股(如AAPL)",
             )
@@ -94,6 +93,7 @@ def _render_mode_and_inputs() -> tuple[str, str, bool, str]:
                 st.cache_data.clear()
                 st.success("缓存已清除")
     else:
+        ## 批量分析输入区
         stock_input = st.text_area(
             "🔍 请输入多个股票代码（每行一个或用逗号分隔）",
             placeholder="例如:\n000001\n600036\n00700\n\n或者: 000001, 600036, 00700, AAPL",
@@ -120,7 +120,7 @@ def _render_analyst_selector() -> EnabledAnalysts:
     """渲染分析师选择器并返回启用配置。"""
 
     st.markdown("---")
-    st.subheader("👥 选择分析师团队")
+    st.subheader("👥 分析师团队")
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -170,7 +170,7 @@ def _render_analyst_selector() -> EnabledAnalysts:
 
 
 def _validate_before_run(api_key_ok: bool, enabled: EnabledAnalysts, stock_input: str) -> bool:
-    """校验分析前置条件并给出用户提示。"""
+    """校验分析前置条件"""
 
     if not stock_input:
         st.error("❌ 请输入股票代码")
@@ -201,13 +201,14 @@ def _run_single_analysis_ui(symbol: str, period: str, enabled: EnabledAnalysts, 
         if bundle.stock_data is None:
             st.error("❌ 无法获取股票历史数据")
             return
-
+        #渲染股票信息与指标
         display_stock_info(bundle.stock_info, bundle.indicators)
         progress_bar.progress(20)
+        #渲染股票K线图与成交量图
         display_stock_chart(bundle.stock_data, bundle.stock_info)
         progress_bar.progress(30)
 
-        status_text.text("📊 正在加载扩展数据...")
+        status_text.text("📊 正在加载财务数据...")
         financial_data = get_financial_data(symbol)
         progress_bar.progress(40)
 

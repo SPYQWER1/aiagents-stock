@@ -1,4 +1,5 @@
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict
 
 from aiagents_stock.ai.deepseek_client import DeepSeekClient
@@ -14,7 +15,6 @@ class StockAnalysisAgents:
     def technical_analyst_agent(self, stock_info: Dict, stock_data: Any, indicators: Dict) -> Dict[str, Any]:
         """技术面分析智能体"""
         print("🔍 技术分析师正在分析中...")
-        time.sleep(1)  # 模拟分析时间
 
         analysis = self.deepseek_client.technical_analysis(stock_info, stock_data, indicators)
 
@@ -26,9 +26,7 @@ class StockAnalysisAgents:
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
-    def fundamental_analyst_agent(
-        self, stock_info: Dict, financial_data: Dict = None, quarterly_data: Dict = None
-    ) -> Dict[str, Any]:
+    def fundamental_analyst_agent(self, stock_info: Dict, financial_data: Dict = None, quarterly_data: Dict = None) -> Dict[str, Any]:
         """基本面分析智能体"""
         print("📊 基本面分析师正在分析中...")
 
@@ -51,8 +49,6 @@ class StockAnalysisAgents:
         else:
             print("   ⚠ 未获取到季报数据，将基于基本财务数据分析")
 
-        time.sleep(1)
-
         analysis = self.deepseek_client.fundamental_analysis(stock_info, financial_data, quarterly_data)
 
         return {
@@ -64,9 +60,7 @@ class StockAnalysisAgents:
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
-    def fund_flow_analyst_agent(
-        self, stock_info: Dict, indicators: Dict, fund_flow_data: Dict = None
-    ) -> Dict[str, Any]:
+    def fund_flow_analyst_agent(self, stock_info: Dict, indicators: Dict, fund_flow_data: Dict = None) -> Dict[str, Any]:
         """资金面分析智能体"""
         print("💰 资金面分析师正在分析中...")
 
@@ -75,8 +69,6 @@ class StockAnalysisAgents:
             print("   ✓ 已获取资金流向数据（akshare数据源）")
         else:
             print("   ⚠ 未获取到资金流向数据，将基于技术指标分析")
-
-        time.sleep(1)
 
         analysis = self.deepseek_client.fund_flow_analysis(stock_info, indicators, fund_flow_data)
 
@@ -90,7 +82,7 @@ class StockAnalysisAgents:
         }
 
     def risk_management_agent(self, stock_info: Dict, indicators: Dict, risk_data: Dict = None) -> Dict[str, Any]:
-        """风险管理智能体（增强版）"""
+        """风险管理智能体"""
         print("⚠️ 风险管理师正在评估中...")
 
         # 如果有风险数据，显示数据来源
@@ -99,23 +91,18 @@ class StockAnalysisAgents:
         else:
             print("   ⚠ 未获取到风险数据，将基于基本信息分析")
 
-        time.sleep(1)
 
         # 构建风险数据文本
         risk_data_text = ""
         if risk_data and risk_data.get("data_success"):
             # 使用格式化的风险数据
             from aiagents_stock.data.risk_data_fetcher import RiskDataFetcher
-
             fetcher = RiskDataFetcher()
             risk_data_text = f"""
-
 【实际风险数据】（来自问财）
 {fetcher.format_risk_data_for_ai(risk_data)}
-
 以上是通过问财（pywencai）获取的实际风险数据，请重点关注这些数据进行深度风险分析。
 """
-
         risk_prompt = f"""
 作为资深风险管理专家，请基于以下信息进行全面深度的风险评估：
 
@@ -254,14 +241,11 @@ class StockAnalysisAgents:
         else:
             print("   ⚠ 未获取到详细情绪数据，将基于基本信息分析")
 
-        time.sleep(1)
-
         # 构建带有市场情绪数据的prompt
         sentiment_data_text = ""
         if sentiment_data and sentiment_data.get("data_success"):
             # 使用格式化的市场情绪数据
             from aiagents_stock.data.market_sentiment_data import MarketSentimentDataFetcher
-
             fetcher = MarketSentimentDataFetcher()
             sentiment_data_text = f"""
 
@@ -347,8 +331,6 @@ class StockAnalysisAgents:
             print(f"   ✓ 已从 {source} 获取 {news_count} 条新闻")
         else:
             print("   ⚠ 未获取到新闻数据，将基于基本信息分析")
-
-        time.sleep(1)
 
         # 构建带有新闻数据的prompt
         news_text = ""
@@ -481,30 +463,50 @@ class StockAnalysisAgents:
 
         # 并行运行各个分析师
         agents_results = {}
+        future_to_name = {}
 
-        # 技术面分析
-        if enabled_analysts.get("technical", True):
-            agents_results["technical"] = self.technical_analyst_agent(stock_info, stock_data, indicators)
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            # 技术面分析
+            if enabled_analysts.get("technical", True):
+                future_to_name[
+                    executor.submit(self.technical_analyst_agent, stock_info, stock_data, indicators)
+                ] = "technical"
 
-        # 基本面分析
-        if enabled_analysts.get("fundamental", True):
-            agents_results["fundamental"] = self.fundamental_analyst_agent(stock_info, financial_data, quarterly_data)
+            # 基本面分析
+            if enabled_analysts.get("fundamental", True):
+                future_to_name[
+                    executor.submit(self.fundamental_analyst_agent, stock_info, financial_data, quarterly_data)
+                ] = "fundamental"
 
-        # 资金面分析（传入资金流向数据）
-        if enabled_analysts.get("fund_flow", True):
-            agents_results["fund_flow"] = self.fund_flow_analyst_agent(stock_info, indicators, fund_flow_data)
+            # 资金面分析（传入资金流向数据）
+            if enabled_analysts.get("fund_flow", True):
+                future_to_name[
+                    executor.submit(self.fund_flow_analyst_agent, stock_info, indicators, fund_flow_data)
+                ] = "fund_flow"
 
-        # 风险管理分析（传入风险数据）
-        if enabled_analysts.get("risk", True):
-            agents_results["risk_management"] = self.risk_management_agent(stock_info, indicators, risk_data)
+            # 风险管理分析（传入风险数据）
+            if enabled_analysts.get("risk", True):
+                future_to_name[
+                    executor.submit(self.risk_management_agent, stock_info, indicators, risk_data)
+                ] = "risk_management"
 
-        # 市场情绪分析（传入市场情绪数据）
-        if enabled_analysts.get("sentiment", False):
-            agents_results["market_sentiment"] = self.market_sentiment_agent(stock_info, sentiment_data)
+            # 市场情绪分析（传入市场情绪数据）
+            if enabled_analysts.get("sentiment", False):
+                future_to_name[executor.submit(self.market_sentiment_agent, stock_info, sentiment_data)] = (
+                    "market_sentiment"
+                )
 
-        # 新闻分析（传入新闻数据）
-        if enabled_analysts.get("news", False):
-            agents_results["news"] = self.news_analyst_agent(stock_info, news_data)
+            # 新闻分析（传入新闻数据）
+            if enabled_analysts.get("news", False):
+                future_to_name[executor.submit(self.news_analyst_agent, stock_info, news_data)] = "news"
+
+            # 等待所有任务完成并获取结果
+            for future in as_completed(future_to_name):
+                name = future_to_name[future]
+                try:
+                    agents_results[name] = future.result()
+                except Exception as e:
+                    print(f"❌ 运行 {name} 分析师时发生错误: {e}")
 
         print("✅ 所有已选择的分析师完成分析")
         print("=" * 50)
@@ -584,7 +586,6 @@ class StockAnalysisAgents:
     def make_final_decision(self, discussion_result: str, stock_info: Dict, indicators: Dict) -> Dict[str, Any]:
         """制定最终投资决策"""
         print("📋 正在制定最终投资决策...")
-        time.sleep(1)
 
         decision = self.deepseek_client.final_decision(discussion_result, stock_info, indicators)
 

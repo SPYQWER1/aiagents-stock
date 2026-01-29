@@ -15,7 +15,7 @@ from aiagents_stock.web.config import CACHE_TTL_OPTIONAL_DATA_SECONDS, CACHE_TTL
 
 @dataclass(frozen=True)
 class StockDataBundle:
-    """股票数据与技术指标的聚合结果。"""
+    """股票数据与技术指标的聚合类。"""
 
     stock_info: dict[str, Any]
     stock_data: pd.DataFrame | None
@@ -35,7 +35,8 @@ def get_stock_data_uncached(symbol: str, period: str) -> StockDataBundle:
     fetcher = StockDataFetcher()
     stock_info = fetcher.get_stock_info(symbol)
     stock_data = fetcher.get_stock_data(symbol, period)
-
+    
+    #  处理股票数据获取失败的情况
     if isinstance(stock_data, dict) and "error" in stock_data:
         return StockDataBundle(stock_info=stock_info, stock_data=None, indicators=None)
 

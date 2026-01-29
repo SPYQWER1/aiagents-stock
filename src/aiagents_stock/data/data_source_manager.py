@@ -49,26 +49,28 @@ class DataSourceManager:
         Returns:
             DataFrame: 包含日期、开盘、收盘、最高、最低、成交量等列
         """
-        # 标准化日期格式
+        # 标准化日期格式，统一为无连字符格式
         if start_date:
             start_date = start_date.replace("-", "")
         if end_date:
             end_date = end_date.replace("-", "")
         else:
+            # 如果未提供结束日期，使用当前日期
             end_date = datetime.now().strftime("%Y%m%d")
 
-        # 优先使用akshare
+        # 优先使用akshare数据源
         try:
             import akshare as ak
 
             print(f"[Akshare] 正在获取 {symbol} 的历史数据...")
 
+            # 使用akshare的股票历史数据接口
             df = ak.stock_zh_a_hist(
                 symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust=adjust
             )
 
             if df is not None and not df.empty:
-                # 标准化列名
+                # 标准化列名，确保返回的数据格式一致
                 df = df.rename(
                     columns={
                         "日期": "date",
@@ -84,31 +86,34 @@ class DataSourceManager:
                         "换手率": "turnover",
                     }
                 )
+                # 转换日期列为datetime类型
                 df["date"] = pd.to_datetime(df["date"])
                 print(f"[Akshare] ✅ 成功获取 {len(df)} 条数据")
                 return df
         except Exception as e:
             print(f"[Akshare] ❌ 获取失败: {e}")
 
-        # akshare失败，尝试tushare
+        # akshare失败，尝试使用tushare作为备用数据源
         if self.tushare_available:
             try:
                 print(f"[Tushare] 正在获取 {symbol} 的历史数据（备用数据源）...")
 
-                # 转换股票代码格式（添加市场后缀）
+                # 转换股票代码格式（添加市场后缀，如000001.SZ）
                 ts_code = self._convert_to_ts_code(symbol)
 
-                # 转换复权类型
+                # 转换复权类型，适配tushare的参数格式
                 adj_dict = {"qfq": "qfq", "hfq": "hfq", "": None}
                 adj = adj_dict.get(adjust, "qfq")
 
-                # 获取数据
+                # 使用tushare的日线数据接口
                 df = self.tushare_api.daily(ts_code=ts_code, start_date=start_date, end_date=end_date, adj=adj)
 
                 if df is not None and not df.empty:
-                    # 标准化列名和数据格式
+                    # 标准化列名，确保与akshare返回格式一致
                     df = df.rename(columns={"trade_date": "date", "vol": "volume", "amount": "amount"})
+                    # 转换日期列为datetime类型
                     df["date"] = pd.to_datetime(df["date"])
+                    # 按日期排序
                     df = df.sort_values("date")
 
                     # 转换成交量单位（tushare单位是手，转换为股）
