@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sqlite3
 from typing import Dict, List, Optional
@@ -8,6 +9,7 @@ class StockMonitorDatabase:
     """股票监测数据库管理类"""
 
     def __init__(self, db_path: str = os.path.join("database_files", "stock_monitor.db")):
+        self.logger = logging.getLogger(__name__)
         self.db_path = db_path
         # 确保数据库所在目录存在
         db_dir = os.path.dirname(self.db_path)
@@ -47,7 +49,7 @@ class StockMonitorDatabase:
             cursor.execute("SELECT trading_hours_only FROM monitored_stocks LIMIT 1")
         except sqlite3.OperationalError:
             cursor.execute("ALTER TABLE monitored_stocks ADD COLUMN trading_hours_only BOOLEAN DEFAULT TRUE")
-            print("✅ 已添加trading_hours_only字段")
+            self.logger.info("✅ 已添加trading_hours_only字段")
 
         # 创建价格历史表
         cursor.execute("""
@@ -143,7 +145,7 @@ class StockMonitorDatabase:
                 quant_config = json.loads(row[13]) if row[13] else None
                 entry_range = json.loads(row[4]) if row[4] else None
             except (json.JSONDecodeError, TypeError) as e:
-                print(f"警告: 股票 {row[1]} 的JSON解析失败: {e}")
+                self.logger.warning(f"警告: 股票 {row[1]} 的JSON解析失败: {e}")
                 entry_range = None
                 quant_config = None
 
@@ -370,7 +372,7 @@ class StockMonitorDatabase:
 
             return affected_rows > 0
         except Exception as e:
-            print(f"删除股票失败: {e}")
+            self.logger.error(f"删除股票失败: {e}", exc_info=True)
             return False
 
     def update_monitored_stock(
@@ -483,7 +485,7 @@ class StockMonitorDatabase:
                 quant_config = json.loads(row[13]) if row[13] else None
                 entry_range = json.loads(row[4]) if row[4] else None
             except (json.JSONDecodeError, TypeError) as e:
-                print(f"警告: 股票 {row[1]} 的JSON解析失败: {e}")
+                self.logger.warning(f"警告: 股票 {row[1]} 的JSON解析失败: {e}")
                 entry_range = None
                 quant_config = None
 
@@ -533,7 +535,7 @@ class StockMonitorDatabase:
                 entry_range = json.loads(row[4]) if row[4] else None
                 quant_config = json.loads(row[12]) if row[12] else None
             except (json.JSONDecodeError, TypeError) as e:
-                print(f"警告: 股票 {row[1]} 的JSON解析失败: {e}")
+                self.logger.warning(f"警告: 股票 {row[1]} 的JSON解析失败: {e}")
                 entry_range = None
                 quant_config = None
 
@@ -592,7 +594,7 @@ class StockMonitorDatabase:
 
                 # 验证必需字段
                 if not symbol or not all([entry_min, entry_max, take_profit, stop_loss]):
-                    print(f"[WARN] {symbol} 参数不完整，跳过")
+                    self.logger.warning(f"[WARN] {symbol} 参数不完整，跳过")
                     failed += 1
                     continue
 
@@ -615,7 +617,7 @@ class StockMonitorDatabase:
                         trading_hours_only=trading_hours_only,
                     )
                     updated += 1
-                    print(f"[OK] 更新监测: {symbol}")
+                    self.logger.info(f"[OK] 更新监测: {symbol}")
                 else:
                     # 添加新监测
                     self.add_monitored_stock(
@@ -630,16 +632,16 @@ class StockMonitorDatabase:
                         trading_hours_only=trading_hours_only,
                     )
                     added += 1
-                    print(f"[OK] 添加监测: {symbol}")
+                    self.logger.info(f"[OK] 添加监测: {symbol}")
 
             except Exception as e:
                 symbol_str = data.get("code") or data.get("symbol", "Unknown")
-                print(f"[ERROR] 处理监测失败 ({symbol_str}): {str(e)}")
+                self.logger.error(f"[ERROR] 处理监测失败 ({symbol_str}): {str(e)}")
                 failed += 1
 
         result = {"added": added, "updated": updated, "failed": failed, "total": added + updated + failed}
 
-        print(f"\n[OK] 批量同步完成: 新增{added}只, 更新{updated}只, 失败{failed}只")
+        self.logger.info(f"\n[OK] 批量同步完成: 新增{added}只, 更新{updated}只, 失败{failed}只")
         return result
 
 

@@ -10,8 +10,7 @@ def show_example_interface() -> None:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown(
-            """
+        st.markdown("""
         ### 🚀 如何使用
         1. **输入股票代码**：支持A股(如000001)、港股(如00700)和美股(如AAPL)
         2. **点击开始分析**：系统将启动AI分析师团队
@@ -24,12 +23,10 @@ def show_example_interface() -> None:
         - **资金面**：资金流向、主力行为
         - **风险管理**：风险识别与控制
         - **市场情绪**：情绪指标、热点分析
-        """
-        )
+        """)
 
     with col2:
-        st.markdown(
-            """
+        st.markdown("""
         ### 📈 示例股票代码
 
         **A股热门**
@@ -46,13 +43,11 @@ def show_example_interface() -> None:
         - AAPL (苹果)
         - MSFT (微软)
         - NVDA (英伟达)
-        """
-        )
+        """)
 
     st.info("💡 提示：首次运行需要配置DeepSeek API Key，请在.env中设置DEEPSEEK_API_KEY")
     st.markdown("---")
-    st.markdown(
-        """
+    st.markdown("""
     ### 🌏 市场支持说明
     - **A股**：完整支持（技术分析、财务数据、资金流向、市场情绪、新闻数据qstock）
     - **港股**：部分支持（技术分析、21项财务指标）⭐️
@@ -60,6 +55,4 @@ def show_example_interface() -> None:
 
     ### 📊 港股支持的财务指标
     盈利能力（6项）、营运能力（3项）、偿债能力（2项）、市场表现（4项）、分红指标（3项）、股本结构（3项）
-    """
-    )
-
+    """)

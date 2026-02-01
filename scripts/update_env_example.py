@@ -98,9 +98,15 @@ WEBHOOK_KEYWORD=
 TZ=Asia/Shanghai
 """
 
+import logging
+
+# 配置日志
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger(__name__)
+
 with open(".env.example", "w", encoding="utf-8") as f:
     f.write(env_example_content)
 
-print("[OK] .env.example file updated successfully")
-print("[OK] File encoding: UTF-8")
-print("[OK] All Chinese characters should display correctly")
+logger.info("[OK] .env.example file updated successfully")
+logger.info("[OK] File encoding: UTF-8")
+logger.info("[OK] All Chinese characters should display correctly")

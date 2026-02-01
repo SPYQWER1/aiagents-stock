@@ -1,6 +1,9 @@
 [tool.black]
 line-length = 120
 target-version = ["py311"]
+extend-exclude = '''
+src/aiagents_stock/web/pages/home.py
+'''
 
 [tool.ruff]
 line-length = 120
@@ -10,3 +13,7 @@ extend-exclude = ["docs"]
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 ignore = ["E501"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["src/aiagents_stock/tests"]

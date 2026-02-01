@@ -100,7 +100,9 @@ class ConfigManager:
 
                         config[key] = value
         except Exception as e:
-            print(f"读取.env文件失败: {e}")
+            self.logger.error(f"读取.env文件失败: {e}", exc_info=True)
+            # 发生错误时返回部分读取的配置或空配置
+            return config
 
         # 确保所有默认配置项都存在
         for key, info in self.default_config.items():
@@ -158,7 +160,7 @@ class ConfigManager:
 
             return True
         except Exception as e:
-            print(f"保存.env文件失败: {e}")
+            self.logger.error(f"保存.env文件失败: {e}", exc_info=True)
             return False
 
     def get_config_info(self) -> Dict[str, Dict[str, Any]]:

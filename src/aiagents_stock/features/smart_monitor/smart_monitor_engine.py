@@ -226,10 +226,7 @@ class SmartMonitorEngine:
             }
 
         except Exception as e:
-            self.logger.error(f"[{stock_code}] 分析失败: {e}")
-            import traceback
-
-            traceback.print_exc()
+            self.logger.error(f"[{stock_code}] 分析失败: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 
     def _execute_decision(self, stock_code: str, decision: Dict, market_data: Dict, has_position: bool) -> Dict:
@@ -508,10 +505,8 @@ class SmartMonitorEngine:
             )
 
         except Exception as e:
-            self.logger.error(f"[{stock_code}] 发送通知失败: {e}")
-            import traceback
+            self.logger.error(f"[{stock_code}] 发送通知失败: {e}", exc_info=True)
 
-            traceback.print_exc()
 
     def start_monitor(
         self,
@@ -641,18 +636,19 @@ if __name__ == "__main__":
     load_dotenv()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logger = logging.getLogger(__name__)
 
     # 使用模拟模式测试
     engine = SmartMonitorEngine(deepseek_api_key=os.getenv("DEEPSEEK_API_KEY"), use_simulator=True)
 
     # 测试分析贵州茅台
-    print("\n测试分析贵州茅台(600519)...")
+    logger.info("测试分析贵州茅台(600519)...")
     result = engine.analyze_stock("600519", auto_trade=False, notify=False)
 
     if result["success"]:
-        print("\n分析成功!")
-        print(f"  决策: {result['decision']['action']}")
-        print(f"  信心度: {result['decision']['confidence']}%")
-        print(f"  理由: {result['decision']['reasoning'][:100]}...")
+        logger.info("分析成功!")
+        logger.info(f"  决策: {result['decision']['action']}")
+        logger.info(f"  信心度: {result['decision']['confidence']}%")
+        logger.info(f"  理由: {result['decision']['reasoning'][:100]}...")
     else:
-        print(f"\n分析失败: {result.get('error')}")
+        logger.error(f"分析失败: {result.get('error')}")

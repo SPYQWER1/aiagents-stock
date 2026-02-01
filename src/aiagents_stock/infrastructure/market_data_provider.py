@@ -1,4 +1,16 @@
+"""
+市场数据提供者实现。
+
+该模块实现了 MarketDataProvider 端口，直接对接 Akshare/Tushare/YFinance 等外部数据源。
+"""
+
+from __future__ import annotations
+
+import time
+import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Any
 
 import akshare as ak
 import numpy as np
@@ -6,97 +18,130 @@ import pandas as pd
 import ta
 import yfinance as yf
 
-from aiagents_stock.data.data_source_manager import data_source_manager
+from aiagents_stock.domain.analysis.dto import StockDataBundle
+from aiagents_stock.domain.analysis.ports import MarketDataProvider
+from aiagents_stock.infrastructure.data_sources.data_source_manager import data_source_manager
+
+logger = logging.getLogger(__name__)
 
 
-class StockDataFetcher:
-    """股票数据获取类"""
 
-    def __init__(self):
-        self.data = None
-        self.info = None
-        self.financial_data = None
-        self.data_source_manager = data_source_manager
+def is_chinese_stock(symbol: str) -> bool:
+    """判断是否为中国A股"""
+    # 简单判断：包含数字且长度为6位的认为是中国A股
+    return symbol.isdigit() and len(symbol) == 6
 
-    def get_stock_info(self, symbol):
-        """
-        获取股票基本信息
 
-        该方法根据股票代码判断股票类型（中国A股、港股、美股），
-        并调用相应的方法获取股票的基本信息，包括名称、价格、涨跌幅、
-        市盈率、市净率、市值等关键数据。
+def is_hk_stock(symbol: str) -> bool:
+    """判断是否为港股"""
+    # 港股代码通常是1-5位数字，或者前面带HK/hk前缀
+    if symbol.upper().startswith("HK"):
+        return True
+    # 纯数字且长度在1-5位之间，认为可能是港股
+    if symbol.isdigit() and 1 <= len(symbol) <= 5:
+        return True
+    return False
 
-        Args:
-            symbol: 股票代码
 
-        Returns:
-            dict: 包含股票基本信息的字典，失败时返回包含error键的字典
-        """
+def normalize_hk_code(symbol: str) -> str:
+    """规范化港股代码为5位格式（如700 -> 00700）"""
+    # 移除HK前缀
+    if symbol.upper().startswith("HK"):
+        symbol = symbol[2:]
+    # 补齐到5位
+    return symbol.zfill(5)
+
+
+@dataclass(frozen=True)
+class AkshareMarketDataProvider(MarketDataProvider):
+    """
+    基于 Akshare/Tushare/YFinance 的市场数据提供者实现。
+    """
+
+    def get_stock_data_bundle(self, *, symbol: str, period: str) -> StockDataBundle:
+        """获取股票数据聚合包（含 K 线、指标）。"""
+        
+        # 1. 获取基本信息
+        stock_info = self._get_stock_info(symbol)
+
+        # 2. 获取历史数据
+        # 转换 period 格式以适配内部逻辑 (e.g. "1y" is standard)
+        raw_stock_data = self._get_stock_data(symbol, period=period)
+        
+        if isinstance(raw_stock_data, dict) and raw_stock_data.get("error"):
+            return StockDataBundle(
+                stock_info=stock_info,
+                stock_data=None,
+                indicators={"error": raw_stock_data.get("error")},
+            )
+
+        stock_data: pd.DataFrame = raw_stock_data
+        
+        # 3. 计算技术指标
+        with_indicators = self._calculate_technical_indicators(stock_data)
+        
+        if isinstance(with_indicators, dict) and with_indicators.get("error"):
+            return StockDataBundle(
+                stock_info=stock_info,
+                stock_data=stock_data,
+                indicators={"error": with_indicators.get("error")},
+            )
+
+        # 4. 提取最新指标快照
+        indicators_snapshot = self._get_latest_indicators(with_indicators)
+        if isinstance(indicators_snapshot, dict) and indicators_snapshot.get("error"):
+            indicators: dict[str, Any] | None = {"error": indicators_snapshot.get("error")}
+        else:
+            indicators = indicators_snapshot
+
+        return StockDataBundle(
+            stock_info=stock_info, 
+            stock_data=with_indicators, 
+            indicators=indicators
+        )
+
+    def get_financial_data(self, *, symbol: str) -> Any:
+        """获取财务数据。"""
         try:
-            # 处理中国A股
-            if self._is_chinese_stock(symbol):
+            if is_chinese_stock(symbol):
+                return self._get_chinese_financial_data(symbol)
+            elif is_hk_stock(symbol):
+                return self._get_hk_financial_data(symbol)
+            else:
+                return self._get_us_financial_data(symbol)
+        except Exception as e:
+            return {"error": f"获取财务数据失败: {str(e)}"}
+
+    def get_stock_info(self, *, symbol: str) -> dict[str, Any]:
+        """获取股票基本信息。"""
+        return self._get_stock_info(symbol)
+
+    # --- Internal Implementation Methods (Ported from StockDataFetcher) ---
+
+    def _get_stock_info(self, symbol: str) -> dict[str, Any]:
+        try:
+            if is_chinese_stock(symbol):
                 return self._get_chinese_stock_info(symbol)
-            # 处理港股
-            elif self._is_hk_stock(symbol):
+            elif is_hk_stock(symbol):
                 return self._get_hk_stock_info(symbol)
-            # 处理美股
             else:
                 return self._get_us_stock_info(symbol)
         except Exception as e:
             return {"error": f"获取股票信息失败: {str(e)}"}
 
-    def get_stock_data(self, symbol, period="1y", interval="1d"):
-        """
-        获取股票历史数据
-
-        该方法根据股票代码判断股票类型，并调用相应的方法获取股票的历史数据，
-        包括开盘价、收盘价、最高价、最低价、成交量等信息。
-
-        Args:
-            symbol: 股票代码
-            period: 时间周期，默认为"1y"（1年）
-            interval: 时间间隔，默认为"1d"（日线）
-
-        Returns:
-            pd.DataFrame: 包含股票历史数据的DataFrame，失败时返回包含error键的字典
-        """
+    def _get_stock_data(self, symbol: str, period: str = "1y", interval: str = "1d") -> pd.DataFrame | dict[str, Any]:
         try:
-            if self._is_chinese_stock(symbol):
+            if is_chinese_stock(symbol):
                 return self._get_chinese_stock_data(symbol, period)
-            elif self._is_hk_stock(symbol):
+            elif is_hk_stock(symbol):
                 return self._get_hk_stock_data(symbol, period)
             else:
                 return self._get_us_stock_data(symbol, period, interval)
         except Exception as e:
             return {"error": f"获取股票数据失败: {str(e)}"}
 
-    def _is_chinese_stock(self, symbol):
-        """判断是否为中国A股"""
-        # 简单判断：包含数字且长度为6位的认为是中国A股
-        return symbol.isdigit() and len(symbol) == 6
-
-    def _is_hk_stock(self, symbol):
-        """判断是否为港股"""
-        # 港股代码通常是1-5位数字，或者前面带HK/hk前缀
-        if symbol.upper().startswith("HK"):
-            return True
-        # 纯数字且长度在1-5位之间，认为可能是港股
-        if symbol.isdigit() and 1 <= len(symbol) <= 5:
-            return True
-        return False
-
-    def _normalize_hk_code(self, symbol):
-        """规范化港股代码为5位格式（如700 -> 00700）"""
-        # 移除HK前缀
-        if symbol.upper().startswith("HK"):
-            symbol = symbol[2:]
-        # 补齐到5位
-        return symbol.zfill(5)
-
-    def _get_chinese_stock_info(self, symbol):
-        """获取中国股票基本信息（支持akshare和tushare数据源自动切换）"""
+    def _get_chinese_stock_info(self, symbol: str) -> dict[str, Any]:
         try:
-            # 初始化基本信息
             info = {
                 "symbol": symbol,
                 "name": "未知",
@@ -109,8 +154,8 @@ class StockDataFetcher:
                 "exchange": "上海/深圳证券交易所",
             }
 
-            # 先尝试使用数据源管理器获取基本信息
-            basic_info = self.data_source_manager.get_stock_basic_info(symbol)
+            # 使用数据源管理器获取基本信息
+            basic_info = data_source_manager.get_stock_basic_info(symbol)
             if basic_info:
                 info.update(basic_info)
 
@@ -147,13 +192,12 @@ class StockDataFetcher:
                             except Exception:
                                 pass
             except Exception as e:
-                print(f"[Akshare] 获取个股详细信息失败: {e}")
+                logger.warning(f"[Akshare] 获取个股详细信息失败: {e}")
                 # 如果akshare失败，尝试从tushare获取
-                if self.data_source_manager.tushare_available and info["name"] == "未知":
-                    print("[Tushare] 尝试获取基本信息（tushare）...")
+                if data_source_manager.tushare_available and info["name"] == "未知":
                     try:
-                        ts_code = self.data_source_manager._convert_to_ts_code(symbol)
-                        df = self.data_source_manager.tushare_api.daily_basic(
+                        ts_code = data_source_manager._convert_to_ts_code(symbol)
+                        df = data_source_manager.tushare_api.daily_basic(
                             ts_code=ts_code, trade_date=datetime.now().strftime("%Y%m%d")
                         )
                         if df is not None and not df.empty:
@@ -161,50 +205,12 @@ class StockDataFetcher:
                             info["pe_ratio"] = row.get("pe", "N/A")
                             info["pb_ratio"] = row.get("pb", "N/A")
                             info["market_cap"] = row.get("total_mv", "N/A")
-                            print("[Tushare] ✅ 成功获取部分信息")
                     except Exception as te:
-                        print(f"[Tushare] ❌ 获取失败: {te}")
+                        logger.warning(f"[Tushare] ❌ 获取失败: {te}")
 
-            # 方法2: 尝试获取历史价格和涨跌幅（如果网络允许）
-            # try:
-            #     # 使用更简单的接口获取实时价格
-            #     real_time_data = ak.stock_zh_a_spot_em()
-            #     if real_time_data is not None and not real_time_data.empty:
-            #         stock_real_time = real_time_data[real_time_data['代码'] == symbol]
-            #         if not stock_real_time.empty:
-            #             row = stock_real_time.iloc[0]
-            #             info['current_price'] = row.get('最新价', 'N/A')
-            #             info['change_percent'] = row.get('涨跌幅', 'N/A')
-            #             if info['name'] == '未知':
-            #                 info['name'] = row.get('名称', '未知')
-
-            #             # 如果实时数据中有市盈率和市净率，优先使用
-            #             if '市盈率-动态' in row and info['pe_ratio'] == 'N/A':
-            #                 try:
-            #                     pe_val = row['市盈率-动态']
-            #                     if pe_val and pe_val != '-':
-            #                         pe_val = float(pe_val)
-            #                         if 0 < pe_val <= 1000:
-            #                             info['pe_ratio'] = pe_val
-            #                 except:
-            #                     pass
-
-            #             if '市净率' in row and info['pb_ratio'] == 'N/A':
-            #                 try:
-            #                     pb_val = row['市净率']
-            #                     if pb_val and pb_val != '-':
-            #                         pb_val = float(pb_val)
-            #                         if 0 < pb_val <= 100:
-            #                             info['pb_ratio'] = pb_val
-            #                 except:
-            #                     pass
-
-            # except Exception as e:
-            #     print(f"[Akshare] 获取实时数据失败: {e}")
-            #     # 如果实时数据获取失败，尝试使用数据源管理器获取历史数据（支持tushare备用）
+            # 尝试获取最近交易数据以补充价格信息
             try:
-                print("[数据源管理器] 尝试获取最近交易数据...")
-                hist_data = self.data_source_manager.get_stock_hist_data(
+                hist_data = data_source_manager.get_stock_hist_data(
                     symbol=symbol,
                     start_date=(datetime.now() - timedelta(days=30)).strftime("%Y%m%d"),
                     end_date=datetime.now().strftime("%Y%m%d"),
@@ -212,20 +218,17 @@ class StockDataFetcher:
                 )
 
                 if hist_data is not None and not hist_data.empty:
-                    # 标准化列名
                     if "close" in hist_data.columns:
                         latest = hist_data.iloc[-1]
                         info["current_price"] = latest["close"]
-                        # 计算涨跌幅
                         if len(hist_data) > 1:
                             prev_close = hist_data.iloc[-2]["close"]
                             change_pct = ((latest["close"] - prev_close) / prev_close) * 100
                             info["change_percent"] = round(change_pct, 2)
-                        print("[数据源管理器] ✅ 成功获取价格数据")
             except Exception as e2:
-                print(f"获取历史数据也失败: {e2}")
+                logger.warning(f"获取历史数据也失败: {e2}")
 
-            # 方法3: 使用百度估值数据获取市盈率和市净率
+            # 补充市盈率/市净率
             if info["pe_ratio"] == "N/A":
                 try:
                     pe_data = ak.stock_zh_valuation_baidu(symbol=symbol, indicator="市盈率(TTM)")
@@ -235,8 +238,8 @@ class StockDataFetcher:
                             pe_val = float(latest_pe)
                             if 0 < pe_val <= 1000:
                                 info["pe_ratio"] = pe_val
-                except Exception as e:
-                    print(f"获取市盈率失败: {e}")
+                except Exception:
+                    pass
 
             if info["pb_ratio"] == "N/A":
                 try:
@@ -247,14 +250,13 @@ class StockDataFetcher:
                             pb_val = float(latest_pb)
                             if 0 < pb_val <= 100:
                                 info["pb_ratio"] = pb_val
-                except Exception as e:
-                    print(f"获取市净率失败: {e}")
+                except Exception:
+                    pass
 
             return info
 
         except Exception as e:
-            print(f"获取中国股票信息完全失败: {e}")
-            # 返回基本信息，避免完全失败
+            logger.error(f"获取中国股票信息完全失败: {e}", exc_info=True)
             return {
                 "symbol": symbol,
                 "name": f"股票{symbol}",
@@ -267,13 +269,9 @@ class StockDataFetcher:
                 "exchange": "上海/深圳证券交易所",
             }
 
-    def _get_hk_stock_info(self, symbol):
-        """获取港股基本信息"""
+    def _get_hk_stock_info(self, symbol: str) -> dict[str, Any]:
         try:
-            # 规范化港股代码
-            hk_code = self._normalize_hk_code(symbol)
-
-            # 初始化基本信息
+            hk_code = normalize_hk_code(symbol)
             info = {
                 "symbol": hk_code,
                 "name": "未知",
@@ -286,20 +284,16 @@ class StockDataFetcher:
                 "exchange": "香港交易所",
             }
 
-            # 方法1: 获取港股实时行情
             try:
-                # 使用akshare获取港股实时数据
                 realtime_df = ak.stock_hk_spot_em()
                 if realtime_df is not None and not realtime_df.empty:
-                    # 查找对应股票
                     stock_data = realtime_df[realtime_df["代码"] == hk_code]
                     if not stock_data.empty:
                         row = stock_data.iloc[0]
                         info["name"] = row.get("名称", "未知")
                         info["current_price"] = row.get("最新价", "N/A")
                         info["change_percent"] = row.get("涨跌幅", "N/A")
-
-                        # 市值（港元）
+                        
                         market_cap = row.get("总市值", "N/A")
                         if market_cap != "N/A":
                             try:
@@ -307,7 +301,6 @@ class StockDataFetcher:
                             except Exception:
                                 pass
 
-                        # 市盈率
                         pe = row.get("市盈率", "N/A")
                         if pe != "N/A" and pe != "-":
                             try:
@@ -317,9 +310,8 @@ class StockDataFetcher:
                             except Exception:
                                 pass
             except Exception as e:
-                print(f"获取港股实时数据失败: {e}")
+                logger.warning(f"获取港股实时数据失败: {e}")
 
-            # 方法2: 尝试使用历史数据获取价格信息
             if info["current_price"] == "N/A":
                 try:
                     hist_df = ak.stock_hk_hist(
@@ -332,19 +324,16 @@ class StockDataFetcher:
                     if hist_df is not None and not hist_df.empty:
                         latest = hist_df.iloc[-1]
                         info["current_price"] = latest["收盘"]
-                        # 计算涨跌幅
                         if len(hist_df) > 1:
                             prev_close = hist_df.iloc[-2]["收盘"]
                             change_pct = ((latest["收盘"] - prev_close) / prev_close) * 100
                             info["change_percent"] = round(change_pct, 2)
                 except Exception as e:
-                    print(f"获取港股历史数据失败: {e}")
+                    logger.warning(f"获取港股历史数据失败: {e}")
 
             return info
 
         except Exception as e:
-            print(f"获取港股信息完全失败: {e}")
-            # 返回基本信息
             return {
                 "symbol": symbol,
                 "name": f"港股{symbol}",
@@ -357,17 +346,11 @@ class StockDataFetcher:
                 "exchange": "香港交易所",
             }
 
-    def _get_us_stock_info(self, symbol):
-        """获取美股基本信息"""
-        import time
-
+    def _get_us_stock_info(self, symbol: str) -> dict[str, Any]:
         try:
-            # 添加延迟避免频率限制
-            time.sleep(1)
-
+            time.sleep(1) # Avoid rate limit
             ticker = yf.Ticker(symbol)
-
-            # 先尝试获取历史数据（通常更稳定）
+            
             try:
                 hist = ticker.history(period="2d")
                 if not hist.empty:
@@ -384,28 +367,23 @@ class StockDataFetcher:
                 current_price = "N/A"
                 change_percent = "N/A"
 
-            # 获取基本信息
             try:
                 info = ticker.info
-
-                # 获取市盈率，优先使用trailing PE，其次forward PE
                 pe_ratio = info.get("trailingPE", info.get("forwardPE", "N/A"))
                 if pe_ratio == "N/A" or pe_ratio is None or (isinstance(pe_ratio, float) and np.isnan(pe_ratio)):
                     pe_ratio = "N/A"
-
-                # 获取市净率
+                
                 pb_ratio = info.get("priceToBook", "N/A")
                 if pb_ratio == "N/A" or pb_ratio is None or (isinstance(pb_ratio, float) and np.isnan(pb_ratio)):
                     pb_ratio = "N/A"
 
-                # 如果历史数据没有获取到价格，尝试从info获取
                 if current_price == "N/A":
                     current_price = info.get("currentPrice", info.get("regularMarketPrice", "N/A"))
 
                 if change_percent == "N/A":
                     change_percent = info.get("regularMarketChangePercent", "N/A")
                     if change_percent != "N/A" and change_percent is not None:
-                        change_percent = change_percent * 100  # 转换为百分比
+                        change_percent = change_percent * 100
 
                 return {
                     "symbol": symbol,
@@ -424,9 +402,7 @@ class StockDataFetcher:
                     "market": "美股",
                     "exchange": info.get("exchange", "N/A"),
                 }
-
             except Exception:
-                # 如果获取详细信息失败，返回基本价格信息
                 return {
                     "symbol": symbol,
                     "name": f"美股{symbol}",
@@ -448,10 +424,8 @@ class StockDataFetcher:
         except Exception as e:
             return {"error": f"获取美股信息失败: {str(e)}"}
 
-    def _get_chinese_stock_data(self, symbol, period="1y"):
-        """获取中国股票历史数据（支持akshare和tushare数据源自动切换）"""
+    def _get_chinese_stock_data(self, symbol: str, period: str = "1y") -> pd.DataFrame | dict[str, Any]:
         try:
-            # 计算日期范围
             end_date = datetime.now().strftime("%Y%m%d")
             if period == "1y":
                 start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
@@ -462,13 +436,11 @@ class StockDataFetcher:
             else:
                 start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
 
-            # 使用数据源管理器获取数据（自动切换akshare和tushare）
-            df = self.data_source_manager.get_stock_hist_data(
+            df = data_source_manager.get_stock_hist_data(
                 symbol=symbol, start_date=start_date, end_date=end_date, adjust="qfq"
             )
 
             if df is not None and not df.empty:
-                # 标准化列名为大写（与原有格式保持一致）
                 df = df.rename(
                     columns={
                         "date": "Date",
@@ -480,28 +452,21 @@ class StockDataFetcher:
                     }
                 )
 
-                # 确保Date列为datetime类型
                 if "Date" not in df.columns and df.index.name == "date":
                     df.index.name = "Date"
                 elif "Date" in df.columns:
                     df["Date"] = pd.to_datetime(df["Date"])
                     df.set_index("Date", inplace=True)
 
-                print(f"✅ 成功获取 {symbol} 的历史数据，共 {len(df)} 条记录")
                 return df
             else:
                 return {"error": "所有数据源均无法获取历史数据"}
-
         except Exception as e:
             return {"error": f"获取中国股票数据失败: {str(e)}"}
 
-    def _get_hk_stock_data(self, symbol, period="1y"):
-        """获取港股历史数据"""
+    def _get_hk_stock_data(self, symbol: str, period: str = "1y") -> pd.DataFrame | dict[str, Any]:
         try:
-            # 规范化港股代码
-            hk_code = self._normalize_hk_code(symbol)
-
-            # 计算日期范围
+            hk_code = normalize_hk_code(symbol)
             end_date = datetime.now().strftime("%Y%m%d")
             if period == "1y":
                 start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
@@ -514,13 +479,11 @@ class StockDataFetcher:
             else:
                 start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
 
-            # 获取港股历史数据
             df = ak.stock_hk_hist(
                 symbol=hk_code, period="daily", start_date=start_date, end_date=end_date, adjust="qfq"
             )
 
             if df is not None and not df.empty:
-                # 重命名列以匹配标准格式
                 df = df.rename(
                     columns={
                         "日期": "Date",
@@ -536,12 +499,10 @@ class StockDataFetcher:
                 return df
             else:
                 return {"error": "无法获取港股历史数据"}
-
         except Exception as e:
             return {"error": f"获取港股数据失败: {str(e)}"}
 
-    def _get_us_stock_data(self, symbol, period="1y", interval="1d"):
-        """获取美股历史数据"""
+    def _get_us_stock_data(self, symbol: str, period: str = "1y", interval: str = "1d") -> pd.DataFrame | dict[str, Any]:
         try:
             ticker = yf.Ticker(symbol)
             df = ticker.history(period=period, interval=interval)
@@ -552,82 +513,47 @@ class StockDataFetcher:
         except Exception as e:
             return {"error": f"获取美股数据失败: {str(e)}"}
 
-    def calculate_technical_indicators(self, df):
-        """
-        计算技术指标
-
-        该方法对股票历史数据计算多种技术指标，包括移动平均线、RSI、MACD、
-        布林带、KDJ等，用于后续的技术分析和策略制定。
-
-        Args:
-            df: 股票历史数据DataFrame
-
-        Returns:
-            pd.DataFrame: 包含技术指标的DataFrame，失败时返回包含error键的字典
-        """
+    def _calculate_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame | dict[str, Any]:
         try:
             if isinstance(df, dict) and "error" in df:
                 return df
 
-            # 过滤非交易日数据（剔除周末和法定节假日）
-            # 非交易日的Volume为0或NaN，直接过滤这些行
             if "Volume" in df.columns:
                 df = df[(df["Volume"] > 0) & (df["Volume"].notna())]
 
-            # 移动平均线
             df["MA5"] = ta.trend.sma_indicator(df["Close"], window=5)
             df["MA10"] = ta.trend.sma_indicator(df["Close"], window=10)
             df["MA20"] = ta.trend.sma_indicator(df["Close"], window=20)
             df["MA60"] = ta.trend.sma_indicator(df["Close"], window=60)
 
-            # RSI
             df["RSI"] = ta.momentum.rsi(df["Close"], window=14)
 
-            # MACD
             macd = ta.trend.MACD(df["Close"])
             df["MACD"] = macd.macd()
             df["MACD_signal"] = macd.macd_signal()
             df["MACD_histogram"] = macd.macd_diff()
 
-            # 布林带
             bollinger = ta.volatility.BollingerBands(df["Close"])
             df["BB_upper"] = bollinger.bollinger_hband()
             df["BB_middle"] = bollinger.bollinger_mavg()
             df["BB_lower"] = bollinger.bollinger_lband()
 
-            # KDJ指标
             df["K"] = ta.momentum.stoch(df["High"], df["Low"], df["Close"])
             df["D"] = ta.momentum.stoch_signal(df["High"], df["Low"], df["Close"])
 
-            # 成交量指标
             df["Volume_MA5"] = ta.trend.sma_indicator(df["Volume"], window=5)
             df["Volume_ratio"] = df["Volume"] / df["Volume_MA5"]
 
             return df
-
         except Exception as e:
             return {"error": f"计算技术指标失败: {str(e)}"}
 
-    def get_latest_indicators(self, df):
-        """
-        获取当前的技术指标值
-
-        该方法从计算了技术指标的DataFrame中提取最新的指标值，
-        包括价格、移动平均线、RSI、MACD、布林带、KDJ等，
-        用于快速了解股票的当前技术状态。
-
-        Args:
-            df: 包含技术指标的DataFrame
-
-        Returns:
-            dict: 包含最新技术指标值的字典，失败时返回包含error键的字典
-        """
+    def _get_latest_indicators(self, df: pd.DataFrame) -> dict[str, Any]:
         try:
             if isinstance(df, dict) and "error" in df:
                 return df
 
             latest = df.iloc[-1]
-
             return {
                 "price": latest["Close"],
                 "ma5": latest["MA5"],
@@ -646,99 +572,52 @@ class StockDataFetcher:
         except Exception as e:
             return {"error": f"获取当前指标失败: {str(e)}"}
 
-    def get_financial_data(self, symbol):
-        """
-        获取详细财务数据
-
-        该方法根据股票代码判断股票类型，并调用相应的方法获取股票的财务数据，
-        包括资产负债表、利润表、现金流量表和财务比率等详细信息，
-        用于基本面分析和价值评估。
-
-        Args:
-            symbol: 股票代码
-
-        Returns:
-            dict: 包含财务数据的字典，失败时返回包含error键的字典
-        """
-        try:
-            if self._is_chinese_stock(symbol):
-                return self._get_chinese_financial_data(symbol)
-            elif self._is_hk_stock(symbol):
-                return self._get_hk_financial_data(symbol)
-            else:
-                return self._get_us_financial_data(symbol)
-        except Exception as e:
-            return {"error": f"获取财务数据失败: {str(e)}"}
-
-    def _get_chinese_financial_data(self, symbol):
-        """获取中国股票财务数据"""
+    def _get_chinese_financial_data(self, symbol: str) -> dict[str, Any]:
         financial_data = {
             "symbol": symbol,
-            "balance_sheet": None,  # 资产负债表
-            "income_statement": None,  # 利润表
-            "cash_flow": None,  # 现金流量表
-            "financial_ratios": {},  # 财务比率
-            "quarter_data": None,  # 季度数据
+            "balance_sheet": None,
+            "income_statement": None,
+            "cash_flow": None,
+            "financial_ratios": {},
+            "quarter_data": None,
         }
 
         try:
-            # 1. 获取资产负债表
             try:
                 balance_sheet = ak.stock_financial_abstract_ths(symbol=symbol, indicator="资产负债表")
                 if balance_sheet is not None and not balance_sheet.empty:
                     financial_data["balance_sheet"] = balance_sheet.head(8).to_dict("records")
-            except Exception as e:
-                print(f"获取资产负债表失败: {e}")
+            except Exception:
+                pass
 
-            # 2. 获取利润表
             try:
                 income_statement = ak.stock_financial_abstract_ths(symbol=symbol, indicator="利润表")
                 if income_statement is not None and not income_statement.empty:
                     financial_data["income_statement"] = income_statement.head(8).to_dict("records")
-            except Exception as e:
-                print(f"获取利润表失败: {e}")
+            except Exception:
+                pass
 
-            # 3. 获取现金流量表
             try:
                 cash_flow = ak.stock_financial_abstract_ths(symbol=symbol, indicator="现金流量表")
                 if cash_flow is not None and not cash_flow.empty:
                     financial_data["cash_flow"] = cash_flow.head(8).to_dict("records")
-            except Exception as e:
-                print(f"获取现金流量表失败: {e}")
+            except Exception:
+                pass
 
-            # 4. 获取主要财务指标
             try:
                 financial_abstract = ak.stock_financial_abstract(symbol=symbol)
                 if financial_abstract is not None and not financial_abstract.empty:
-                    # 提取关键财务指标
                     key_indicators = [
-                        "净资产收益率(ROE)",
-                        "总资产报酬率(ROA)",
-                        "销售毛利率",
-                        "销售净利率",
-                        "资产负债率",
-                        "流动比率",
-                        "速动比率",
-                        "存货周转率",
-                        "应收账款周转率",
-                        "总资产周转率",
-                        "营业收入同比增长",
-                        "净利润同比增长",
+                        "净资产收益率(ROE)", "总资产报酬率(ROA)", "销售毛利率", "销售净利率",
+                        "资产负债率", "流动比率", "速动比率", "存货周转率",
+                        "应收账款周转率", "总资产周转率", "营业收入同比增长", "净利润同比增长",
                     ]
-
-                    # 筛选出包含关键指标的行
                     indicator_rows = financial_abstract[financial_abstract["指标"].isin(key_indicators)]
-
                     if not indicator_rows.empty:
-                        # 获取最新的报告期数据（第一列日期）
                         date_columns = [col for col in financial_abstract.columns if col not in ["选项", "指标"]]
                         if date_columns:
-                            latest_date = date_columns[0]  # 最新日期列
-
-                            # 构建财务比率字典
+                            latest_date = date_columns[0]
                             financial_ratios = {"报告期": latest_date}
-
-                            # 提取每个指标的最新值
                             for _, row in indicator_rows.iterrows():
                                 indicator_name = row["指标"]
                                 value = row.get(latest_date, "N/A")
@@ -749,29 +628,17 @@ class StockDataFetcher:
                                         financial_ratios[indicator_name] = "N/A"
                                 else:
                                     financial_ratios[indicator_name] = "N/A"
-
                             financial_data["financial_ratios"] = financial_ratios
-            except Exception as e:
-                print(f"获取财务指标失败: {e}")
-
-            # 注意：季报数据现在由 quarterly_report_data.py 模块使用 akshare 获取（8期完整季报）
-            # 不再使用问财获取季报，避免重复
+            except Exception:
+                pass
 
             return financial_data
-
         except Exception as e:
-            print(f"获取中国股票财务数据失败: {e}")
+            logger.error(f"获取中国股票财务数据失败: {e}", exc_info=True)
             return financial_data
 
-    # 已删除 _get_quarter_data_from_wencai 方法
-    # 季报数据现在统一由 quarterly_report_data.py 模块使用 akshare 获取
-    # 获取最近8期完整季报（利润表、资产负债表、现金流量表）
-    # 避免重复获取，提高效率
-
-    def _get_hk_financial_data(self, symbol):
-        """获取港股财务数据"""
-        hk_code = self._normalize_hk_code(symbol)
-
+    def _get_hk_financial_data(self, symbol: str) -> dict[str, Any]:
+        hk_code = normalize_hk_code(symbol)
         financial_data = {
             "symbol": hk_code,
             "balance_sheet": None,
@@ -784,16 +651,10 @@ class StockDataFetcher:
         }
 
         try:
-            # 使用akshare获取港股财务指标（东方财富数据源）
-            print(f"正在获取港股 {hk_code} 的财务指标...")
             try:
                 financial_indicator = ak.stock_hk_financial_indicator_em(symbol=hk_code)
-
                 if financial_indicator is not None and not financial_indicator.empty:
-                    # 将财务指标数据转换为字典
                     indicator_dict = financial_indicator.iloc[0].to_dict()
-
-                    # 整理财务比率数据
                     financial_data["financial_ratios"] = {
                         "基本每股收益": self._safe_convert(indicator_dict.get("基本每股收益(元)", "N/A")),
                         "每股净资产": self._safe_convert(indicator_dict.get("每股净资产(元)", "N/A")),
@@ -816,28 +677,17 @@ class StockDataFetcher:
                         "已发行股本": self._safe_convert(indicator_dict.get("已发行股本(股)", "N/A")),
                         "每手股": self._safe_convert(indicator_dict.get("每手股", "N/A")),
                     }
-
-                    print(f"✅ 成功获取港股 {hk_code} 的财务指标")
-                    print(f"   ROE: {financial_data['financial_ratios']['ROE股东权益回报率']}")
-                    print(f"   市盈率: {financial_data['financial_ratios']['市盈率']}")
-                    print(f"   市净率: {financial_data['financial_ratios']['市净率']}")
                 else:
-                    print(f"⚠️ 未获取到港股 {hk_code} 的财务指标数据")
                     financial_data["note"] = "未获取到财务数据"
-
             except Exception as e:
-                print(f"⚠️ 获取港股财务指标失败: {e}")
                 financial_data["note"] = f"获取财务数据失败: {str(e)}"
 
             return financial_data
-
         except Exception as e:
-            print(f"获取港股财务数据异常: {e}")
             financial_data["note"] = f"获取失败: {str(e)}"
             return financial_data
 
-    def _get_us_financial_data(self, symbol):
-        """获取美股财务数据"""
+    def _get_us_financial_data(self, symbol: str) -> dict[str, Any]:
         financial_data = {
             "symbol": symbol,
             "balance_sheet": None,
@@ -851,31 +701,27 @@ class StockDataFetcher:
             stock = yf.Ticker(symbol)
             info = stock.info
 
-            # 1. 资产负债表
             try:
                 balance_sheet = stock.balance_sheet
                 if balance_sheet is not None and not balance_sheet.empty:
                     financial_data["balance_sheet"] = balance_sheet.iloc[:, :4].to_dict("index")
-            except Exception as e:
-                print(f"获取资产负债表失败: {e}")
+            except Exception:
+                pass
 
-            # 2. 利润表
             try:
                 income_stmt = stock.income_stmt
                 if income_stmt is not None and not income_stmt.empty:
                     financial_data["income_statement"] = income_stmt.iloc[:, :4].to_dict("index")
-            except Exception as e:
-                print(f"获取利润表失败: {e}")
+            except Exception:
+                pass
 
-            # 3. 现金流量表
             try:
                 cash_flow = stock.cashflow
                 if cash_flow is not None and not cash_flow.empty:
                     financial_data["cash_flow"] = cash_flow.iloc[:, :4].to_dict("index")
-            except Exception as e:
-                print(f"获取现金流量表失败: {e}")
+            except Exception:
+                pass
 
-            # 4. 财务比率（从info中提取）
             financial_data["financial_ratios"] = {
                 "ROE": info.get("returnOnEquity", "N/A"),
                 "ROA": info.get("returnOnAssets", "N/A"),
@@ -894,62 +740,16 @@ class StockDataFetcher:
             }
 
             return financial_data
-
-        except Exception as e:
-            print(f"获取美股财务数据失败: {e}")
+        except Exception:
             return financial_data
 
-    # 已删除 get_fund_flow_data 方法（使用问财）
-    # 资金流向数据现在统一由 fund_flow_akshare.py 模块使用 akshare 获取
-    # 获取近20个交易日的详细资金流向数据（主力、超大单、大单、中单、小单）
-    # 避免重复获取，提高效率和数据质量
-    #
-    # 删除说明：
-    # - 删除了约160行代码
-    # - 删除原因：重复获取，数据格式不规整，日期范围不准确
-    # - 新方案：使用 akshare 的 stock_individual_fund_flow 接口
-    # - 新方案优势：数据标准化、准确获取最近20个交易日、6类资金详细分类
-
-    def get_risk_data(self, symbol):
-        """
-        获取股票风险数据（限售解禁、大股东减持、重要事件）
-        只支持中国A股
-        """
-        try:
-            # 只有中国A股才支持风险数据查询
-            if not self._is_chinese_stock(symbol):
-                return {"symbol": symbol, "data_success": False, "error": "仅支持中国A股风险数据查询"}
-
-            # 使用风险数据获取器
-            from aiagents_stock.data.risk_data_fetcher import RiskDataFetcher
-
-            fetcher = RiskDataFetcher()
-            risk_data = fetcher.get_risk_data(symbol)
-
-            return risk_data
-
-        except Exception as e:
-            return {"symbol": symbol, "data_success": False, "error": f"获取风险数据失败: {str(e)}"}
-
-    def _safe_convert(self, value):
-        """安全地转换数值"""
+    def _safe_convert(self, value: Any) -> Any:
         if value is None or value == "" or (isinstance(value, float) and np.isnan(value)):
             return "N/A"
         try:
             if isinstance(value, str):
-                # 移除百分号和逗号
                 value = value.replace("%", "").replace(",", "")
                 return float(value)
             return value
         except Exception:
             return value
-
-    def _calculate_main_fund_ratio(self, main_fund, total_fund):
-        """计算主力资金占比"""
-        try:
-            if main_fund != "N/A" and total_fund != "N/A" and total_fund != 0:
-                ratio = (main_fund / total_fund) * 100
-                return f"{ratio:.2f}%"
-        except Exception:
-            pass
-        return "N/A"

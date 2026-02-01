@@ -655,6 +655,7 @@ class SmartMonitorDB:
 if __name__ == "__main__":
     # 测试数据库
     logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
 
     db = SmartMonitorDB(os.path.join("database_files", "test_smart_monitor.db"))
 
@@ -669,10 +670,10 @@ if __name__ == "__main__":
         }
     )
 
-    print(f"创建监控任务 ID: {task_id}")
+    logger.info(f"创建监控任务 ID: {task_id}")
 
     # 获取任务列表
     tasks = db.get_monitor_tasks()
-    print(f"\n监控任务列表: {len(tasks)}个")
+    logger.info(f"\n监控任务列表: {len(tasks)}个")
     for task in tasks:
-        print(f"  - {task['stock_code']} {task['stock_name']}")
+        logger.info(f"  - {task['stock_code']} {task['stock_name']}")

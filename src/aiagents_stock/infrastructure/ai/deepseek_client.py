@@ -17,7 +17,13 @@ class DeepSeekClient:
             base_url=config.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
         )
 
-    def call_api(self,messages: List[Dict[str, str]],model: Optional[str] = None,temperature: float = 0.7,max_tokens: int = 2000,) -> str:
+    def call_api(
+        self,
+        messages: List[Dict[str, str]],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2000,
+    ) -> str:
         """调用DeepSeek API"""
         # 使用实例的模型，如果没有传入则使用默认模型
         model_to_use = model or self.model
@@ -141,7 +147,7 @@ class DeepSeekClient:
         quarterly_section = ""
         if quarterly_data and quarterly_data.get("data_success"):
             # 使用格式化的季报数据
-            from aiagents_stock.data.quarterly_report_data import QuarterlyReportDataFetcher
+            from aiagents_stock.infrastructure.data_sources.quarterly_report_data import QuarterlyReportDataFetcher
 
             fetcher = QuarterlyReportDataFetcher()
             quarterly_section = f"""
@@ -245,7 +251,7 @@ class DeepSeekClient:
         fund_flow_section = ""
         if fund_flow_data and fund_flow_data.get("data_success"):
             # 使用格式化的资金流向数据
-            from aiagents_stock.data.fund_flow_akshare import FundFlowAkshareDataFetcher
+            from aiagents_stock.infrastructure.data_sources.fund_flow_akshare import FundFlowAkshareDataFetcher
 
             fetcher = FundFlowAkshareDataFetcher()
             fund_flow_section = f"""

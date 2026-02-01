@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 import pandas as pd
 
-from aiagents_stock.ai.deepseek_client import DeepSeekClient
+from aiagents_stock.infrastructure.ai.deepseek_client import DeepSeekClient
 from aiagents_stock.features.sector_strategy.sector_strategy_agents import SectorStrategyAgents
 from aiagents_stock.features.sector_strategy.sector_strategy_db import SectorStrategyDatabase
 
@@ -24,9 +24,7 @@ class SectorStrategyEngine:
         self.deepseek_client = DeepSeekClient(model=model)
         self.database = SectorStrategyDatabase()
         self.logger = logging.getLogger(__name__)
-        if not self.logger.handlers:
-            logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s")
-        print(f"[智策引擎] 初始化完成 (模型: {model})")
+        self.logger.info(f"[智策引擎] 初始化完成 (模型: {model})")
 
     def save_raw_data_with_fallback(self, data_type, data_df, data_date=None):
         """
@@ -107,9 +105,9 @@ class SectorStrategyEngine:
         Returns:
             完整的分析结果
         """
-        print("\n" + "=" * 60)
-        print("🚀 智策综合分析系统启动")
-        print("=" * 60)
+        self.logger.info("=" * 60)
+        self.logger.info("🚀 智策综合分析系统启动")
+        self.logger.info("=" * 60)
 
         results = {
             "success": False,
@@ -121,20 +119,20 @@ class SectorStrategyEngine:
 
         try:
             # 1. 运行四个AI智能体分析
-            print("\n[阶段1] AI智能体分析集群工作中...")
-            print("-" * 60)
+            self.logger.info("[阶段1] AI智能体分析集群工作中...")
+            self.logger.info("-" * 60)
 
             agents_results = {}
 
             # 宏观策略师
-            print("1/4 宏观策略师...")
+            self.logger.info("1/4 宏观策略师...")
             macro_result = self.agents.macro_strategist_agent(
                 market_data=data.get("market_overview", {}), news_data=data.get("news", [])
             )
             agents_results["macro"] = macro_result
 
             # 板块诊断师
-            print("2/4 板块诊断师...")
+            self.logger.info("2/4 板块诊断师...")
             sector_result = self.agents.sector_diagnostician_agent(
                 sectors_data=data.get("sectors", {}),
                 concepts_data=data.get("concepts", {}),
@@ -143,7 +141,7 @@ class SectorStrategyEngine:
             agents_results["sector"] = sector_result
 
             # 资金流向分析师
-            print("3/4 资金流向分析师...")
+            self.logger.info("3/4 资金流向分析师...")
             fund_result = self.agents.fund_flow_analyst_agent(
                 fund_flow_data=data.get("sector_fund_flow", {}),
                 north_flow_data=data.get("north_flow", {}),
@@ -152,7 +150,7 @@ class SectorStrategyEngine:
             agents_results["fund"] = fund_result
 
             # 市场情绪解码员
-            print("4/4 市场情绪解码员...")
+            self.logger.info("4/4 市场情绪解码员...")
             sentiment_result = self.agents.market_sentiment_decoder_agent(
                 market_data=data.get("market_overview", {}),
                 sectors_data=data.get("sectors", {}),
@@ -161,31 +159,31 @@ class SectorStrategyEngine:
             agents_results["sentiment"] = sentiment_result
 
             results["agents_analysis"] = agents_results
-            print("\n✓ 所有智能体分析完成")
+            self.logger.info("✓ 所有智能体分析完成")
 
             # 2. 综合研判
-            print("\n[阶段2] 综合研判引擎工作中...")
-            print("-" * 60)
+            self.logger.info("[阶段2] 综合研判引擎工作中...")
+            self.logger.info("-" * 60)
             comprehensive_report = self._conduct_comprehensive_discussion(agents_results)
             results["comprehensive_report"] = comprehensive_report
-            print("✓ 综合研判完成")
+            self.logger.info("✓ 综合研判完成")
 
             # 3. 生成最终预测
-            print("\n[阶段3] 生成最终预测...")
-            print("-" * 60)
+            self.logger.info("[阶段3] 生成最终预测...")
+            self.logger.info("-" * 60)
             predictions = self._generate_final_predictions(comprehensive_report, agents_results, data)
             results["final_predictions"] = predictions
-            print("✓ 预测生成完成")
+            self.logger.info("✓ 预测生成完成")
 
             results["success"] = True
 
             # 4. 保存分析报告
-            print("\n[阶段4] 保存分析报告...")
-            print("-" * 60)
+            self.logger.info("[阶段4] 保存分析报告...")
+            self.logger.info("-" * 60)
             try:
                 report_id = self.save_analysis_report(results, data)
                 results["report_id"] = report_id
-                print(f"✓ 分析报告已保存 (ID: {report_id})")
+                self.logger.info(f"✓ 分析报告已保存 (ID: {report_id})")
                 # 保存后读取报告详情并回传到结果，用于主页面动态渲染
                 try:
                     saved_report = self.database.get_analysis_report(report_id)
@@ -194,18 +192,15 @@ class SectorStrategyEngine:
                 except Exception as fetch_e:
                     self.logger.warning(f"[智策引擎] 获取保存报告详情失败: {fetch_e}")
             except Exception as e:
-                print(f"⚠ 保存分析报告失败: {e}")
+                self.logger.error(f"⚠ 保存分析报告失败: {e}", exc_info=True)
                 self.logger.error(f"[智策引擎] 保存分析报告失败: {e}")
 
-            print("\n" + "=" * 60)
-            print("✓ 智策综合分析完成！")
-            print("=" * 60)
+            self.logger.info("=" * 60)
+            self.logger.info("✓ 智策综合分析完成！")
+            self.logger.info("=" * 60)
 
         except Exception as e:
-            print(f"\n✗ 分析过程出错: {e}")
-            import traceback
-
-            traceback.print_exc()
+            self.logger.error(f"\n✗ 分析过程出错: {e}", exc_info=True)
             results["error"] = str(e)
 
         return results
@@ -214,7 +209,7 @@ class SectorStrategyEngine:
         """
         综合研判 - 整合各智能体的分析
         """
-        print("  🤝 智能体团队正在综合讨论...")
+        self.logger.info("  🤝 智能体团队正在综合讨论...")
         time.sleep(2)
 
         # 收集各分析师的报告
@@ -276,14 +271,14 @@ class SectorStrategyEngine:
 
         report = self.deepseek_client.call_api(messages, max_tokens=5000)
 
-        print("  ✓ 综合研判完成")
+        self.logger.info("  ✓ 综合研判完成")
         return report
 
     def _generate_final_predictions(self, comprehensive_report: str, agents_results: Dict, raw_data: Dict) -> Dict:
         """
         生成最终预测 - 板块多空/轮动/热度
         """
-        print("  📊 生成板块多空/轮动/热度预测...")
+        self.logger.info("  📊 生成板块多空/轮动/热度预测...")
         time.sleep(2)
 
         # 提取板块列表用于预测
@@ -409,13 +404,13 @@ class SectorStrategyEngine:
             json_match = re.search(r"\{.*\}", response, re.DOTALL)
             if json_match:
                 predictions = json.loads(json_match.group())
-                print("  ✓ 预测报告生成成功（JSON格式）")
+                self.logger.info("  ✓ 预测报告生成成功（JSON格式）")
                 return predictions
             else:
-                print("  ⚠ 未能解析JSON，返回文本格式")
+                self.logger.warning("  ⚠ 未能解析JSON，返回文本格式")
                 return {"prediction_text": response}
         except Exception as e:
-            print(f"  ⚠ JSON解析失败: {e}，返回文本格式")
+            self.logger.error(f"  ⚠ JSON解析失败: {e}，返回文本格式", exc_info=True)
             return {"prediction_text": response}
 
     def save_analysis_report(self, results: Dict, original_data: Dict) -> int:
@@ -578,55 +573,38 @@ class SectorStrategyEngine:
 
 # 测试函数
 if __name__ == "__main__":
-    print("=" * 60)
-    print("测试智策综合研判引擎")
-    print("=" * 60)
+    # 配置日志
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logger = logging.getLogger(__name__)
 
-    # 创建模拟数据
-    test_data = {
-        "success": True,
-        "sectors": {
-            "电子": {
-                "change_pct": 2.5,
-                "turnover": 3.5,
-                "top_stock": "某某科技",
-                "top_stock_change": 5.0,
-                "up_count": 80,
-                "down_count": 20,
-            },
-            "计算机": {
-                "change_pct": 1.8,
-                "turnover": 4.0,
-                "top_stock": "某某软件",
-                "top_stock_change": 4.5,
-                "up_count": 70,
-                "down_count": 30,
-            },
-        },
-        "market_overview": {
-            "sh_index": {"close": 3200, "change_pct": 0.5},
-            "total_stocks": 5000,
-            "up_count": 3000,
-            "up_ratio": 60.0,
-        },
-        "news": [{"title": "测试新闻", "content": "测试内容", "publish_time": "2024-01-15"}],
-        "sector_fund_flow": {
-            "today": [
-                {
-                    "sector": "电子",
-                    "main_net_inflow": 100000,
-                    "main_net_inflow_pct": 2.0,
-                    "change_pct": 2.5,
-                    "super_large_net_inflow": 50000,
-                }
-            ]
-        },
-        "north_flow": {"date": "2024-01-15", "north_net_inflow": 50000},
-    }
+    # 测试代码
+    logger.info("=" * 60)
+    logger.info("测试智策综合研判引擎")
+    logger.info("=" * 60)
 
-    engine = SectorStrategyEngine()
+    try:
+        engine = SectorStrategyEngine()
 
-    print("\n开始综合分析...")
-    # 注意：这只是测试框架，实际运行需要真实数据和API key
-    # results = engine.run_comprehensive_analysis(test_data)
-    # print(f"\n分析结果: {results.get('success')}")
+        # 构造测试数据
+        test_data = {
+            "market_overview": {"sh_index": 3200, "volume": 10000},
+            "news": [{"title": "测试新闻", "content": "测试内容"}],
+            "sectors": {"半导体": {"change_pct": 2.5}, "医药": {"change_pct": -1.2}},
+            "concepts": {},
+            "sector_fund_flow": {},
+            "north_flow": {},
+        }
+
+        logger.info("\n开始综合分析...")
+        results = engine.run_comprehensive_analysis(test_data)
+
+        # logger.info(f"\n分析结果: {results.get('success')}")
+        if results.get("success"):
+            logger.info("分析成功")
+           # logger.info(json.dumps(results, indent=2, ensure_ascii=False))
+            pass
+        else:
+            logger.error(f"分析失败: {results.get('error')}")
+
+    except Exception as e:
+        logger.error(f"测试过程出错: {e}", exc_info=True)

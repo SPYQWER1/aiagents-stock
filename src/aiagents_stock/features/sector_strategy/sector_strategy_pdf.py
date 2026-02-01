@@ -2,6 +2,7 @@
 智策报告PDF导出模块
 """
 
+import logging
 import os
 import tempfile
 from datetime import datetime
@@ -21,6 +22,7 @@ class SectorStrategyPDFGenerator:
 
     def __init__(self):
         """初始化PDF生成器"""
+        self.logger = logging.getLogger(__name__)
         self.setup_fonts()
 
     def setup_fonts(self):
@@ -38,17 +40,17 @@ class SectorStrategyPDFGenerator:
                     try:
                         pdfmetrics.registerFont(TTFont("ChineseFont", font_path))
                         self.chinese_font = "ChineseFont"
-                        print(f"[PDF] 成功加载字体: {font_path}")
+                        self.logger.info(f"[PDF] 成功加载字体: {font_path}")
                         return
                     except Exception:
                         continue
 
             # 如果都失败，使用默认字体
             self.chinese_font = "Helvetica"
-            print("[PDF] 警告: 未找到中文字体，使用默认字体")
+            self.logger.warning("[PDF] 警告: 未找到中文字体，使用默认字体")
 
         except Exception as e:
-            print(f"[PDF] 字体设置失败: {e}")
+            self.logger.error(f"[PDF] 字体设置失败: {e}", exc_info=True)
             self.chinese_font = "Helvetica"
 
     def generate_pdf(self, result_data: dict, output_path: str = None) -> str:
@@ -104,15 +106,12 @@ class SectorStrategyPDFGenerator:
             # 生成PDF
             doc.build(story)
 
-            print(f"[PDF] 报告生成成功: {output_path}")
+            self.logger.info(f"[PDF] 报告生成成功: {output_path}")
             return output_path
 
         except Exception as e:
-            print(f"[PDF] 生成失败: {e}")
-            import traceback
-
-            traceback.print_exc()
-            raise
+            self.logger.error(f"[PDF] 生成失败: {e}", exc_info=True)
+            return None
 
     def _create_title_page(self, data: dict) -> list:
         """创建标题页"""
@@ -501,6 +500,9 @@ class SectorStrategyPDFGenerator:
 
 # 测试函数
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
     # 创建测试数据
     test_data = {
         "success": True,
@@ -532,4 +534,4 @@ if __name__ == "__main__":
 
     generator = SectorStrategyPDFGenerator()
     output_path = generator.generate_pdf(test_data)
-    print(f"测试PDF生成: {output_path}")
+    logger.info(f"测试PDF生成: {output_path}")

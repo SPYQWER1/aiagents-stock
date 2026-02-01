@@ -119,15 +119,13 @@ def _render_add_to_monitor_dialog(record: dict[str, Any]) -> None:
     if is_duplicate:
         st.warning(f"⚠️ {record['symbol']} 已经在监测列表中。继续添加将创建重复监测项。")
 
-    st.info(
-        f"""
+    st.info(f"""
         **从分析结果中提取的数据：**
         - 进场区间: {entry_min} - {entry_max}
         - 止盈位: {take_profit if take_profit > 0 else '未设置'}
         - 止损位: {stop_loss if stop_loss > 0 else '未设置'}
         - 投资评级: {rating}
-        """
-    )
+        """)
 
     with st.form(key=f"monitor_form_{record['id']}"):
         st.markdown("**请确认或修改监测参数：**")

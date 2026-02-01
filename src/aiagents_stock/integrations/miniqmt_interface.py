@@ -6,6 +6,7 @@ MiniQMT量化交易接口
 支持自动下单、仓位管理、策略执行等功能
 """
 
+import logging
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
@@ -49,6 +50,7 @@ class MiniQMTInterface:
         Args:
             config: 配置字典，包含账户信息、连接参数等
         """
+        self.logger = logging.getLogger(__name__)
         self.config = config or {}
         self.connected = False
         self.account_id = None
@@ -91,7 +93,7 @@ class MiniQMTInterface:
             self.connected = False
             return True
         except Exception as e:
-            print(f"断开连接失败: {e}")
+            self.logger.error(f"断开连接失败: {e}", exc_info=True)
             return False
 
     def is_connected(self) -> bool:
@@ -405,7 +407,7 @@ class MiniQMTInterface:
             return quantity
 
         except Exception as e:
-            print(f"计算仓位失败: {e}")
+            self.logger.error(f"计算仓位失败: {e}", exc_info=True)
             return 0
 
     def get_risk_metrics(self, symbol: str) -> Dict:

@@ -368,9 +368,13 @@ class LonghubangEngine:
 
 # 测试函数
 if __name__ == "__main__":
-    print("=" * 60)
-    print("测试智瞰龙虎分析引擎")
-    print("=" * 60)
+    # 配置基本日志
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logger = logging.getLogger(__name__)
+
+    logger.info("=" * 60)
+    logger.info("测试智瞰龙虎分析引擎")
+    logger.info("=" * 60)
 
     # 创建引擎实例
     engine = LonghubangEngine()
@@ -380,11 +384,11 @@ if __name__ == "__main__":
     results = engine.run_comprehensive_analysis(date=yesterday)
 
     if results.get("success"):
-        print("\n" + "=" * 60)
-        print("分析成功！")
-        print("=" * 60)
-        print(f"数据记录: {results['data_info']['total_records']}")
-        print(f"涉及股票: {results['data_info']['total_stocks']}")
-        print(f"推荐股票: {len(results['recommended_stocks'])}")
+        logger.info("\n" + "=" * 60)
+        logger.info("分析成功！")
+        logger.info("=" * 60)
+        logger.info(f"数据记录: {results['data_info']['total_records']}")
+        logger.info(f"涉及股票: {results['data_info']['total_stocks']}")
+        logger.info(f"推荐股票: {len(results['recommended_stocks'])}")
     else:
-        print(f"\n分析失败: {results.get('error', '未知错误')}")
+        logger.error(f"\n分析失败: {results.get('error', '未知错误')}")

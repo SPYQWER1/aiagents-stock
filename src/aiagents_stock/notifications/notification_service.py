@@ -1,5 +1,6 @@
 import os
 import smtplib
+import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Dict, List
@@ -7,6 +8,8 @@ from typing import Dict, List
 import streamlit as st
 
 from aiagents_stock.features.monitor.monitor_db import monitor_db
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationService:
@@ -63,28 +66,25 @@ class NotificationService:
         notifications = monitor_db.get_pending_notifications()
 
         if not notifications:
-            print("没有待发送的通知")
+            logger.info("没有待发送的通知")
             return
 
-        print(f"\n{'='*50}")
-        print(f"开始发送通知，共 {len(notifications)} 条")
-        print(f"{'='*50}")
+        logger.info(f"\n{'='*50}")
+        logger.info(f"开始发送通知，共 {len(notifications)} 条")
+        logger.info(f"{'='*50}")
 
         for notification in notifications:
             try:
-                print(f"\n处理通知: {notification['symbol']} - {notification['type']}")
+                logger.info(f"\n处理通知: {notification['symbol']} - {notification['type']}")
                 if self.send_notification(notification):
                     monitor_db.mark_notification_sent(notification["id"])
-                    print(f"✅ 通知已成功发送并标记: {notification['message']}")
+                    logger.info(f"✅ 通知已成功发送并标记: {notification['message']}")
                 else:
-                    print(f"❌ 通知发送失败: {notification['message']}")
+                    logger.error(f"❌ 通知发送失败: {notification['message']}")
             except Exception as e:
-                print(f"❌ 发送通知时出错: {e}")
-                import traceback
+                logger.error(f"❌ 发送通知时出错: {e}", exc_info=True)
 
-                traceback.print_exc()
-
-        print(f"{'='*50}\n")
+        logger.info(f"{'='*50}\n")
 
     def send_notification(self, notification: Dict) -> bool:
         """发送单个通知"""
@@ -121,11 +121,11 @@ class NotificationService:
                     self.config["email_to"],
                 ]
             ):
-                print("⚠️ 邮件配置不完整，使用界面通知")
-                print(f"  - SMTP服务器: {self.config['smtp_server'] or '未配置'}")
-                print(f"  - 发件人: {self.config['email_from'] or '未配置'}")
-                print(f"  - 收件人: {self.config['email_to'] or '未配置'}")
-                print(f"  - 密码: {'已配置' if self.config['email_password'] else '未配置'}")
+                logger.warning("⚠️ 邮件配置不完整，使用界面通知")
+                logger.info(f"  - SMTP服务器: {self.config['smtp_server'] or '未配置'}")
+                logger.info(f"  - 发件人: {self.config['email_from'] or '未配置'}")
+                logger.info(f"  - 收件人: {self.config['email_to'] or '未配置'}")
+                logger.info(f"  - 密码: {'已配置' if self.config['email_password'] else '未配置'}")
                 self._show_streamlit_notification(notification)
                 return True
 
@@ -149,31 +149,31 @@ class NotificationService:
 
             msg.attach(MIMEText(body, "html"))
 
-            print("📧 正在发送邮件...")
-            print(f"  - 收件人: {self.config['email_to']}")
-            print(f"  - 主题: 股票监测提醒 - {notification['symbol']}")
+            logger.info("📧 正在发送邮件...")
+            logger.info(f"  - 收件人: {self.config['email_to']}")
+            logger.info(f"  - 主题: 股票监测提醒 - {notification['symbol']}")
 
             # 根据端口选择连接方式
             if self.config["smtp_port"] == 465:
-                print(f"  - 使用 SMTP_SSL 连接 {self.config['smtp_server']}:{self.config['smtp_port']}")
+                logger.info(f"  - 使用 SMTP_SSL 连接 {self.config['smtp_server']}:{self.config['smtp_port']}")
                 server = smtplib.SMTP_SSL(self.config["smtp_server"], self.config["smtp_port"], timeout=15)
             else:
-                print(f"  - 使用 SMTP+TLS 连接 {self.config['smtp_server']}:{self.config['smtp_port']}")
+                logger.info(f"  - 使用 SMTP+TLS 连接 {self.config['smtp_server']}:{self.config['smtp_port']}")
                 server = smtplib.SMTP(self.config["smtp_server"], self.config["smtp_port"], timeout=15)
                 server.starttls()
 
-            print("  - 正在登录...")
+            logger.info("  - 正在登录...")
             server.login(self.config["email_from"], self.config["email_password"])
-            print("  - 正在发送...")
+            logger.info("  - 正在发送...")
             server.send_message(msg)
             server.quit()
-            print(f"✅ 邮件发送成功: {notification['symbol']}")
+            logger.info(f"✅ 邮件发送成功: {notification['symbol']}")
             return True
 
         except Exception as e:
-            print(f"邮件发送失败: {e}")
+            logger.error(f"邮件发送失败: {e}", exc_info=True)
             # 邮件发送失败时，使用界面通知作为备用方案
-            print("使用界面通知作为备用方案")
+            logger.info("使用界面通知作为备用方案")
             self._show_streamlit_notification(notification)
             return True
 
@@ -222,7 +222,7 @@ class NotificationService:
             server.quit()
             return True
         except Exception as e:
-            print(f"邮件配置测试失败: {e}")
+            logger.error(f"邮件配置测试失败: {e}", exc_info=True)
             return False
 
     def send_test_email(self) -> tuple[bool, str]:
@@ -310,7 +310,7 @@ class NotificationService:
         try:
             # 检查webhook配置是否完整
             if not self.config["webhook_url"]:
-                print("⚠️ Webhook URL未配置")
+                logger.warning("⚠️ Webhook URL未配置")
                 return False
 
             webhook_type = self.config["webhook_type"]
@@ -320,11 +320,11 @@ class NotificationService:
             elif webhook_type == "feishu":
                 return self._send_feishu_webhook(notification)
             else:
-                print(f"⚠️ 不支持的webhook类型: {webhook_type}")
+                logger.warning(f"⚠️ 不支持的webhook类型: {webhook_type}")
                 return False
 
         except Exception as e:
-            print(f"Webhook发送失败: {e}")
+            logger.error(f"Webhook发送失败: {e}", exc_info=True)
             return False
 
     def _send_dingtalk_webhook(self, notification: Dict) -> bool:
@@ -376,8 +376,8 @@ _此消息由AI股票分析系统自动发送_"""
                 },
             }
 
-            print("[钉钉] 正在发送Webhook...")
-            print(f"  - URL: {self.config['webhook_url'][:50]}...")
+            logger.info("[钉钉] 正在发送Webhook...")
+            logger.info(f"  - URL: {self.config['webhook_url'][:50]}...")
 
             response = requests.post(
                 self.config["webhook_url"], json=data, headers={"Content-Type": "application/json"}, timeout=10
@@ -386,17 +386,17 @@ _此消息由AI股票分析系统自动发送_"""
             if response.status_code == 200:
                 result = response.json()
                 if result.get("errcode") == 0:
-                    print("[成功] 钉钉Webhook发送成功")
+                    logger.info("[成功] 钉钉Webhook发送成功")
                     return True
                 else:
-                    print(f"[失败] 钉钉Webhook返回错误: {result.get('errmsg')}")
+                    logger.error(f"[失败] 钉钉Webhook返回错误: {result.get('errmsg')}")
                     return False
             else:
-                print(f"[失败] 钉钉Webhook请求失败: HTTP {response.status_code}")
+                logger.error(f"[失败] 钉钉Webhook请求失败: HTTP {response.status_code}")
                 return False
 
         except Exception as e:
-            print(f"钉钉Webhook发送异常: {e}")
+            logger.error(f"钉钉Webhook发送异常: {e}", exc_info=True)
             return False
 
     def _send_feishu_webhook(self, notification: Dict) -> bool:
@@ -455,8 +455,8 @@ _此消息由AI股票分析系统自动发送_"""
                 },
             }
 
-            print("[飞书] 正在发送Webhook...")
-            print(f"  - URL: {self.config['webhook_url'][:50]}...")
+            logger.info("[飞书] 正在发送Webhook...")
+            logger.info(f"  - URL: {self.config['webhook_url'][:50]}...")
 
             response = requests.post(
                 self.config["webhook_url"], json=data, headers={"Content-Type": "application/json"}, timeout=10
@@ -465,17 +465,17 @@ _此消息由AI股票分析系统自动发送_"""
             if response.status_code == 200:
                 result = response.json()
                 if result.get("code") == 0:
-                    print("[成功] 飞书Webhook发送成功")
+                    logger.info("[成功] 飞书Webhook发送成功")
                     return True
                 else:
-                    print(f"[失败] 飞书Webhook返回错误: {result.get('msg')}")
+                    logger.error(f"[失败] 飞书Webhook返回错误: {result.get('msg')}")
                     return False
             else:
-                print(f"[失败] 飞书Webhook请求失败: HTTP {response.status_code}")
+                logger.error(f"[失败] 飞书Webhook请求失败: HTTP {response.status_code}")
                 return False
 
         except Exception as e:
-            print(f"飞书Webhook发送异常: {e}")
+            logger.error(f"飞书Webhook发送异常: {e}", exc_info=True)
             return False
 
     def send_test_webhook(self) -> tuple[bool, str]:
@@ -674,22 +674,19 @@ _此消息由AI股票分析系统自动发送_"""
                 email_success = self._send_custom_email(subject, html_body, text_body)
                 if email_success:
                     success = True
-                    print("[OK] 邮件通知发送成功")
+                    logger.info("✅ 邮件通知发送成功")
 
             # 发送Webhook
             if self.config["webhook_enabled"]:
                 webhook_success = self._send_portfolio_webhook(analysis_results, sync_result)
                 if webhook_success:
                     success = True
-                    print("[OK] Webhook通知发送成功")
+                    logger.info("✅ Webhook通知发送成功")
 
             return success
 
         except Exception as e:
-            print(f"[ERROR] 发送持仓分析通知失败: {str(e)}")
-            import traceback
-
-            traceback.print_exc()
+            logger.error(f"❌ 发送持仓分析通知失败: {str(e)}", exc_info=True)
             return False
 
     def _send_custom_email(self, subject: str, html_body: str, text_body: str) -> bool:
@@ -711,10 +708,11 @@ _此消息由AI股票分析系统自动发送_"""
                 server.login(self.config["email_from"], self.config["email_password"])
                 server.send_message(msg)
 
+            logger.info(f"✅ 邮件发送成功: {subject}")
             return True
 
         except Exception as e:
-            print(f"[ERROR] 邮件发送失败: {str(e)}")
+            logger.error(f"❌ 邮件发送失败: {str(e)}", exc_info=True)
             return False
 
     def _send_portfolio_webhook(self, analysis_results: dict, sync_result: dict = None) -> bool:
@@ -756,7 +754,7 @@ _此消息由AI股票分析系统自动发送_"""
             return response.status_code == 200
 
         except Exception as e:
-            print(f"[ERROR] Webhook发送失败: {str(e)}")
+            logger.error(f"[ERROR] Webhook发送失败: {str(e)}", exc_info=True)
             return False
 
 

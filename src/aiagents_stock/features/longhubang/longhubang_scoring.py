@@ -52,7 +52,7 @@ class LonghubangScoring:
         # 机构关键词
         self.institution_keywords = ["机构专用", "机构", "基金", "保险", "社保", "QFII", "RQFII", "券商", "信托"]
 
-        print("[智瞰龙虎] 评分系统初始化完成")
+        self.logger.info("[智瞰龙虎] 评分系统初始化完成")
 
     def calculate_stock_score(self, stock_data: List[Dict]) -> float:
         """
@@ -560,9 +560,13 @@ class LonghubangScoring:
 
 # 测试函数
 if __name__ == "__main__":
-    print("=" * 60)
-    print("测试智瞰龙虎评分系统")
-    print("=" * 60)
+    # 配置基本日志
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logger = logging.getLogger(__name__)
+
+    logger.info("=" * 60)
+    logger.info("测试智瞰龙虎评分系统")
+    logger.info("=" * 60)
 
     # 创建测试数据
     test_data = [
@@ -593,7 +597,8 @@ if __name__ == "__main__":
     # 测试评分
     df_result = scoring.score_all_stocks(test_data)
 
-    print("\n评分结果：")
-    print(df_result)
+    logger.info("\n评分结果：")
+    # 使用 to_string() 避免打印 DataFrame 时截断
+    logger.info("\n" + df_result.to_string())
 
-    print("\n" + scoring.get_score_explanation())
+    logger.info("\n" + scoring.get_score_explanation())

@@ -26,7 +26,8 @@ class SectorStrategyScheduler:
         self.last_result = None
         self.last_notification_time = None  # 记录上次通知时间，防止重复
         self._analysis_lock = threading.Lock()  # 添加锁，防止并发执行
-        print("[智策定时] 调度器初始化完成")
+        self.logger = logging.getLogger(__name__)
+        self.logger.info("[智策定时] 调度器初始化完成")
 
     def start(self, schedule_time="09:00"):
         """
@@ -36,7 +37,7 @@ class SectorStrategyScheduler:
             schedule_time: 定时时间，格式 "HH:MM"
         """
         if self.running:
-            print("[智策定时] 调度器已在运行中")
+            self.logger.warning("[智策定时] 调度器已在运行中")
             return False
 
         self.schedule_time = schedule_time
@@ -47,14 +48,14 @@ class SectorStrategyScheduler:
             jobs_to_remove = [job for job in schedule.jobs if "sector_strategy" in job.tags]
             for job in jobs_to_remove:
                 schedule.cancel_job(job)
-            print(f"[智策定时] 清除了 {len(jobs_to_remove)} 个旧任务")
+            self.logger.info(f"[智策定时] 清除了 {len(jobs_to_remove)} 个旧任务")
         except Exception as e:
-            print(f"[智策定时] 清除旧任务时出错: {e}")
+            self.logger.error(f"[智策定时] 清除旧任务时出错: {e}", exc_info=True)
 
         # 设置定时任务（确保只添加一次）
         job = schedule.every().day.at(schedule_time).do(self._run_analysis_safe)
         job.tag("sector_strategy")
-        print(f"[智策定时] 添加新任务: 每天 {schedule_time}")
+        self.logger.info(f"[智策定时] 添加新任务: 每天 {schedule_time}")
 
         # 设置运行标志
         self.running = True
@@ -63,13 +64,13 @@ class SectorStrategyScheduler:
         self.thread = threading.Thread(target=self._schedule_loop, daemon=True)
         self.thread.start()
 
-        print(f"[智策定时] ✓ 定时任务已启动，每天 {schedule_time} 运行")
+        self.logger.info(f"[智策定时] ✓ 定时任务已启动，每天 {schedule_time} 运行")
         return True
 
     def stop(self):
         """停止定时任务"""
         if not self.running:
-            print("[智策定时] 调度器未运行")
+            self.logger.warning("[智策定时] 调度器未运行")
             return False
 
         self.running = False
@@ -79,28 +80,28 @@ class SectorStrategyScheduler:
         jobs_to_remove = [job for job in schedule.jobs if "sector_strategy" in job.tags]
         for job in jobs_to_remove:
             schedule.cancel_job(job)
-        print(f"[智策定时] 清除了 {len(jobs_to_remove)} 个任务")
+        self.logger.info(f"[智策定时] 清除了 {len(jobs_to_remove)} 个任务")
 
-        print("[智策定时] ✓ 定时任务已停止")
+        self.logger.info("[智策定时] ✓ 定时任务已停止")
         return True
 
     def _schedule_loop(self):
         """定时任务循环"""
-        print("[智策定时] 后台线程已启动")
+        self.logger.info("[智策定时] 后台线程已启动")
 
         while self.running:
             try:
                 schedule.run_pending()
                 time.sleep(60)  # 每分钟检查一次
             except Exception as e:
-                print(f"[智策定时] ✗ 调度循环出错: {e}")
+                self.logger.error(f"[智策定时] ✗ 调度循环出错: {e}", exc_info=True)
                 time.sleep(60)
 
     def _run_analysis_safe(self):
         """运行智策分析（带锁保护，防止并发执行）"""
         # 尝试获取锁，如果已被占用则跳过本次执行
         if not self._analysis_lock.acquire(blocking=False):
-            print("[智策定时] ⚠️ 上一次分析还未完成，跳过本次执行")
+            self.logger.warning("[智策定时] ⚠️ 上一次分析还未完成，跳过本次执行")
             return
 
         try:
@@ -110,52 +111,49 @@ class SectorStrategyScheduler:
 
     def _run_analysis(self):
         """运行智策分析"""
-        print("\n" + "=" * 60)
-        print(f"[智策定时] 开始定时分析 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print("=" * 60)
+        self.logger.info("=" * 60)
+        self.logger.info(f"[智策定时] 开始定时分析 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        self.logger.info("=" * 60)
 
         try:
             # 1. 获取数据
-            print("[智策定时] [1/3] 获取市场数据...")
+            self.logger.info("[智策定时] [1/3] 获取市场数据...")
             fetcher = SectorStrategyDataFetcher()
             data = fetcher.get_all_sector_data()
 
             if not data.get("success"):
-                print("[智策定时] ✗ 数据获取失败")
+                self.logger.error("[智策定时] ✗ 数据获取失败")
                 self._send_error_notification("数据获取失败")
                 return
 
-            print("[智策定时] ✓ 数据获取成功")
+            self.logger.info("[智策定时] ✓ 数据获取成功")
 
             # 2. 运行AI分析
-            print("[智策定时] [2/3] AI智能体分析中...")
+            self.logger.info("[智策定时] [2/3] AI智能体分析中...")
             engine = SectorStrategyEngine(model="deepseek-chat")
             result = engine.run_comprehensive_analysis(data)
 
             if not result.get("success"):
-                print("[智策定时] ✗ 分析失败")
+                self.logger.error("[智策定时] ✗ 分析失败")
                 self._send_error_notification("AI分析失败")
                 return
 
-            print("[智策定时] ✓ 分析完成")
+            self.logger.info("[智策定时] ✓ 分析完成")
 
             # 3. 发送邮件通知
-            print("[智策定时] [3/3] 发送邮件通知...")
+            self.logger.info("[智策定时] [3/3] 发送邮件通知...")
             self._send_analysis_notification(result)
 
             # 保存最后运行结果
             self.last_run_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.last_result = result
 
-            print("=" * 60)
-            print("[智策定时] ✓ 定时分析完成！")
-            print("=" * 60 + "\n")
+            self.logger.info("=" * 60)
+            self.logger.info("[智策定时] ✓ 定时分析完成！")
+            self.logger.info("=" * 60 + "\n")
 
         except Exception as e:
-            print(f"[智策定时] ✗ 分析过程出错: {e}")
-            import traceback
-
-            traceback.print_exc()
+            self.logger.error(f"[智策定时] ✗ 分析过程出错: {e}", exc_info=True)
             self._send_error_notification(f"分析异常: {str(e)}")
 
     def _send_analysis_notification(self, result):
@@ -166,7 +164,7 @@ class SectorStrategyScheduler:
             if self.last_notification_time:
                 time_diff = (current_time - self.last_notification_time).total_seconds()
                 if time_diff < 300:  # 5分钟 = 300秒
-                    print(f"[智策定时] ⚠️ 距离上次通知仅{time_diff:.0f}秒，跳过重复发送")
+                    self.logger.warning(f"[智策定时] ⚠️ 距离上次通知仅{time_diff:.0f}秒，跳过重复发送")
                     return
 
             config = notification_service.config
@@ -177,13 +175,13 @@ class SectorStrategyScheduler:
 
             # 尝试发送Webhook
             if config.get("webhook_enabled") and config.get("webhook_url"):
-                print("[智策定时] [Webhook] 准备发送...")
+                self.logger.info("[智策定时] [Webhook] 准备发送...")
                 webhook_success = self._send_webhook_direct(predictions, timestamp)
                 if webhook_success:
-                    print("[智策定时] ✓ Webhook发送成功")
+                    self.logger.info("[智策定时] ✓ Webhook发送成功")
                     sent_count += 1
                 else:
-                    print("[智策定时] ✗ Webhook发送失败")
+                    self.logger.error("[智策定时] ✗ Webhook发送失败")
 
             # 尝试发送邮件
             if config.get("email_enabled") and all(
@@ -194,29 +192,26 @@ class SectorStrategyScheduler:
                     config.get("email_to"),
                 ]
             ):
-                print("[智策定时] [邮件] 准备发送...")
+                self.logger.info("[智策定时] [邮件] 准备发送...")
                 subject = f"智策板块分析报告 - {timestamp}"
                 body = self._format_email_body(predictions, timestamp)
                 email_success = self._send_email_direct(subject, body)
                 if email_success:
-                    print("[智策定时] ✓ 邮件发送成功")
+                    self.logger.info("[智策定时] ✓ 邮件发送成功")
                     sent_count += 1
                 else:
-                    print("[智策定时] ✗ 邮件发送失败")
+                    self.logger.error("[智策定时] ✗ 邮件发送失败")
 
             # 更新最后通知时间
             if sent_count > 0:
                 self.last_notification_time = current_time
-                print(f"[智策定时] 📝 已记录通知时间: {current_time.strftime('%H:%M:%S')}")
+                self.logger.info(f"[智策定时] 📝 已记录通知时间: {current_time.strftime('%H:%M:%S')}")
 
             if sent_count == 0:
-                print("[智策定时] ⚠️ 未配置通知方式或发送全部失败")
+                self.logger.warning("[智策定时] ⚠️ 未配置通知方式或发送全部失败")
 
         except Exception as e:
-            print(f"[智策定时] ✗ 通知发送异常: {e}")
-            import traceback
-
-            traceback.print_exc()
+            self.logger.error(f"[智策定时] ✗ 通知发送异常: {e}", exc_info=True)
 
     def _send_error_notification(self, error_msg):
         """发送错误通知邮件"""
@@ -250,14 +245,11 @@ class SectorStrategyScheduler:
             elif webhook_type == "feishu":
                 return self._send_feishu(webhook_url, summary, timestamp)
             else:
-                print(f"[智策定时] ✗ 不支持的webhook类型: {webhook_type}")
+                self.logger.error(f"[智策定时] ✗ 不支持的webhook类型: {webhook_type}")
                 return False
 
         except Exception as e:
-            print(f"[智策定时] ✗ Webhook发送失败: {e}")
-            import traceback
-
-            traceback.print_exc()
+            self.logger.error(f"[智策定时] ✗ Webhook发送失败: {e}", exc_info=True)
             return False
 
     def _send_dingtalk(self, url, summary, timestamp):
@@ -279,7 +271,7 @@ class SectorStrategyScheduler:
             return False
 
         except Exception as e:
-            print(f"[智策定时] 钉钉发送异常: {e}")
+            self.logger.error(f"[智策定时] 钉钉发送异常: {e}")
             return False
 
     def _send_feishu(self, url, summary, timestamp):
@@ -304,7 +296,7 @@ class SectorStrategyScheduler:
             return False
 
         except Exception as e:
-            print(f"[智策定时] 飞书发送异常: {e}")
+            self.logger.error(f"[智策定时] 飞书发送异常: {e}")
             return False
 
     def _format_webhook_summary(self, predictions, timestamp):
@@ -392,32 +384,29 @@ class SectorStrategyScheduler:
             # 添加正文（纯文本）
             msg.attach(MIMEText(body, "plain", "utf-8"))
 
-            print("[智策定时] 📧 正在发送邮件...")
-            print(f"[智策定时]   - 收件人: {config['email_to']}")
-            print(f"[智策定时]   - 主题: {subject}")
+            self.logger.info("[智策定时] 📧 正在发送邮件...")
+            self.logger.info(f"[智策定时]   - 收件人: {config['email_to']}")
+            self.logger.info(f"[智策定时]   - 主题: {subject}")
 
             # 根据端口选择连接方式
             if config["smtp_port"] == 465:
-                print(f"[智策定时]   - 使用 SMTP_SSL 连接 {config['smtp_server']}:{config['smtp_port']}")
+                self.logger.info(f"[智策定时]   - 使用 SMTP_SSL 连接 {config['smtp_server']}:{config['smtp_port']}")
                 server = smtplib.SMTP_SSL(config["smtp_server"], config["smtp_port"], timeout=15)
             else:
-                print(f"[智策定时]   - 使用 SMTP+TLS 连接 {config['smtp_server']}:{config['smtp_port']}")
+                self.logger.info(f"[智策定时]   - 使用 SMTP+TLS 连接 {config['smtp_server']}:{config['smtp_port']}")
                 server = smtplib.SMTP(config["smtp_server"], config["smtp_port"], timeout=15)
                 server.starttls()
 
-            print("[智策定时]   - 正在登录...")
+            self.logger.info("[智策定时]   - 正在登录...")
             server.login(config["email_from"], config["email_password"])
-            print("[智策定时]   - 正在发送...")
+            self.logger.info("[智策定时]   - 正在发送...")
             server.send_message(msg)
             server.quit()
-            print("[智策定时] ✓ 邮件发送成功")
+            self.logger.info("[智策定时] ✓ 邮件发送成功")
             return True
 
         except Exception as e:
-            print(f"[智策定时] ✗ 邮件发送失败: {e}")
-            import traceback
-
-            traceback.print_exc()
+            self.logger.error(f"[智策定时] ✗ 邮件发送失败: {e}", exc_info=True)
             return False
 
     def _format_email_body(self, predictions, timestamp):
@@ -578,7 +567,7 @@ class SectorStrategyScheduler:
 
     def manual_run(self):
         """手动触发一次分析"""
-        print("[智策定时] 手动触发分析...")
+        self.logger.info("[智策定时] 手动触发分析...")
         self._run_analysis()
 
     def get_status(self):
@@ -614,23 +603,27 @@ sector_strategy_scheduler = SectorStrategyScheduler()
 
 # 测试函数
 if __name__ == "__main__":
-    print("智策定时分析服务测试")
-    print("=" * 60)
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
+    logger.info("智策定时分析服务测试")
+    logger.info("=" * 60)
 
     # 启动定时任务（测试用，设置为当前时间后1分钟）
     from datetime import datetime, timedelta
 
     test_time = (datetime.now() + timedelta(minutes=1)).strftime("%H:%M")
 
-    print(f"设置测试时间: {test_time}")
+    logger.info(f"设置测试时间: {test_time}")
     sector_strategy_scheduler.start(test_time)
 
     # 保持运行
     try:
         while True:
             status = sector_strategy_scheduler.get_status()
-            print(f"\n状态: {status}")
+            logger.info(f"\n状态: {status}")
             time.sleep(30)
     except KeyboardInterrupt:
-        print("\n停止测试...")
+        logger.info("\n停止测试...")
         sector_strategy_scheduler.stop()

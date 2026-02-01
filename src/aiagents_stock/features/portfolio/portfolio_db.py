@@ -4,6 +4,7 @@
 提供持仓股票和分析历史的数据库操作接口
 """
 
+import logging
 import os
 import sqlite3
 from datetime import datetime
@@ -23,6 +24,7 @@ class PortfolioDB:
         Args:
             db_path: 数据库文件路径
         """
+        self.logger = logging.getLogger(__name__)
         self.db_path = db_path
         db_dir = os.path.dirname(self.db_path)
         if db_dir and not os.path.exists(db_dir):
@@ -87,10 +89,10 @@ class PortfolioDB:
             """)
 
             conn.commit()
-            print(f"[OK] 数据库初始化成功: {self.db_path}")
+            self.logger.info(f"[OK] 数据库初始化成功: {self.db_path}")
 
         except Exception as e:
-            print(f"[ERROR] 数据库初始化失败: {e}")
+            self.logger.error(f"[ERROR] 数据库初始化失败: {e}", exc_info=True)
             conn.rollback()
             raise
         finally:
@@ -139,14 +141,14 @@ class PortfolioDB:
 
             conn.commit()
             stock_id = cursor.lastrowid
-            print(f"[OK] 添加持仓股票成功: {code} {name} (ID: {stock_id})")
+            self.logger.info(f"[OK] 添加持仓股票成功: {code} {name} (ID: {stock_id})")
             return stock_id
 
         except sqlite3.IntegrityError as e:
-            print(f"[ERROR] 股票代码已存在: {code}")
+            self.logger.error(f"[ERROR] 股票代码已存在: {code}")
             raise ValueError(f"股票代码 {code} 已存在") from e
         except Exception as e:
-            print(f"[ERROR] 添加持仓股票失败: {e}")
+            self.logger.error(f"[ERROR] 添加持仓股票失败: {e}", exc_info=True)
             conn.rollback()
             raise
         finally:
@@ -171,7 +173,7 @@ class PortfolioDB:
         update_fields = {k: v for k, v in kwargs.items() if k in allowed_fields}
 
         if not update_fields:
-            print("[WARN] 没有需要更新的字段")
+            self.logger.warning("[WARN] 没有需要更新的字段")
             return False
 
         # 添加更新时间
@@ -194,14 +196,14 @@ class PortfolioDB:
             conn.commit()
 
             if cursor.rowcount > 0:
-                print(f"[OK] 更新持仓股票成功: ID {stock_id}")
+                self.logger.info(f"[OK] 更新持仓股票成功: ID {stock_id}")
                 return True
             else:
-                print(f"[WARN] 未找到股票: ID {stock_id}")
+                self.logger.warning(f"[WARN] 未找到股票: ID {stock_id}")
                 return False
 
         except Exception as e:
-            print(f"[ERROR] 更新持仓股票失败: {e}")
+            self.logger.error(f"[ERROR] 更新持仓股票失败: {e}", exc_info=True)
             conn.rollback()
             raise
         finally:
@@ -226,14 +228,14 @@ class PortfolioDB:
             conn.commit()
 
             if cursor.rowcount > 0:
-                print(f"[OK] 删除持仓股票成功: ID {stock_id}")
+                self.logger.info(f"[OK] 删除持仓股票成功: ID {stock_id}")
                 return True
             else:
-                print(f"[WARN] 未找到股票: ID {stock_id}")
+                self.logger.warning(f"[WARN] 未找到股票: ID {stock_id}")
                 return False
 
         except Exception as e:
-            print(f"[ERROR] 删除持仓股票失败: {e}")
+            self.logger.error(f"[ERROR] 删除持仓股票失败: {e}", exc_info=True)
             conn.rollback()
             raise
         finally:
@@ -425,11 +427,11 @@ class PortfolioDB:
 
             conn.commit()
             analysis_id = cursor.lastrowid
-            print(f"[OK] 保存分析历史成功: 股票ID {stock_id}, 评级 {rating}")
+            self.logger.info(f"[OK] 保存分析历史成功: 股票ID {stock_id}, 评级 {rating}")
             return analysis_id
 
         except Exception as e:
-            print(f"[ERROR] 保存分析历史失败: {e}")
+            self.logger.error(f"[ERROR] 保存分析历史失败: {e}", exc_info=True)
             conn.rollback()
             raise
         finally:
@@ -577,11 +579,11 @@ class PortfolioDB:
 
             conn.commit()
             deleted_count = cursor.rowcount
-            print(f"[OK] 清理历史分析记录: 删除 {deleted_count} 条记录")
+            self.logger.info(f"[OK] 清理历史分析记录: 删除 {deleted_count} 条记录")
             return deleted_count
 
         except Exception as e:
-            print(f"[ERROR] 清理历史分析记录失败: {e}")
+            self.logger.error(f"[ERROR] 清理历史分析记录失败: {e}", exc_info=True)
             conn.rollback()
             raise
         finally:
@@ -632,9 +634,12 @@ portfolio_db = PortfolioDB()
 
 if __name__ == "__main__":
     # 测试代码
-    print("=" * 50)
-    print("持仓股票数据库测试")
-    print("=" * 50)
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
+    logger.info("=" * 50)
+    logger.info("持仓股票数据库测试")
+    logger.info("=" * 50)
 
     # 初始化数据库
     db = PortfolioDB(os.path.join("database_files", "test_portfolio.db"))
@@ -642,15 +647,15 @@ if __name__ == "__main__":
     # 测试添加股票
     try:
         stock_id = db.add_stock("600519", "贵州茅台", 1650.5, 100, "长期持有")
-        print(f"\n添加股票ID: {stock_id}")
+        logger.info(f"\n添加股票ID: {stock_id}")
     except ValueError as e:
-        print(f"\n{e}")
+        logger.error(f"\n{e}")
 
     # 测试查询所有股票
-    print("\n所有持仓股票:")
+    logger.info("\n所有持仓股票:")
     stocks = db.get_all_stocks()
     for stock in stocks:
-        print(f"  {stock['code']} {stock['name']}")
+        logger.info(f"  {stock['code']} {stock['name']}")
 
     # 测试保存分析历史
     if stocks:
@@ -658,12 +663,12 @@ if __name__ == "__main__":
         analysis_id = db.save_analysis(
             stock_id, "买入", 8.5, 1700.0, 1850.0, 1600.0, 1650.0, 1900.0, 1500.0, "技术面和基本面均良好"
         )
-        print(f"\n保存分析记录ID: {analysis_id}")
+        logger.info(f"\n保存分析记录ID: {analysis_id}")
 
         # 查询分析历史
-        print(f"\n股票 {stocks[0]['code']} 的分析历史:")
+        logger.info(f"\n股票 {stocks[0]['code']} 的分析历史:")
         history = db.get_analysis_history(stock_id)
         for h in history:
-            print(f"  {h['analysis_time']}: {h['rating']} (信心度: {h['confidence']})")
+            logger.info(f"  {h['analysis_time']}: {h['rating']} (信心度: {h['confidence']})")
 
-    print("\n[OK] 数据库测试完成")
+    logger.info("\n[OK] 数据库测试完成")

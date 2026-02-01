@@ -19,24 +19,11 @@ from aiagents_stock.web.config import (
     EnabledAnalysts,
 )
 from aiagents_stock.web.services.analysis_service import (
+    analyze_single_stock_via_use_case,
     get_financial_data,
-    get_financial_data_uncached,
-    get_fund_flow_data,
-    get_fund_flow_data_uncached,
-    get_news_data,
-    get_news_data_uncached,
-    get_quarterly_data,
-    get_quarterly_data_uncached,
-    get_risk_data,
-    get_risk_data_uncached,
-    get_sentiment_data,
-    get_sentiment_data_uncached,
     get_stock_data,
-    get_stock_data_uncached,
-    parse_stock_list,
-    run_ai_analysis,
-    save_analysis_to_db,
 )
+from aiagents_stock.web.utils.parsers import parse_stock_list
 from aiagents_stock.web.utils.session_state import reset_all_analysis_state, reset_batch_analysis_state
 
 
@@ -184,95 +171,57 @@ def _validate_before_run(api_key_ok: bool, enabled: EnabledAnalysts, stock_input
     return True
 
 
-def _run_single_analysis_ui(symbol: str, period: str, enabled: EnabledAnalysts, selected_model: str) -> None:
-    """执行并渲染单股分析流程（含进度与错误提示）。"""
+def _run_single_analysis_use_case_ui(symbol: str, period: str, enabled: EnabledAnalysts, selected_model: str) -> None:
+    """执行并渲染单股分析流程（新架构用例路径）。"""
 
     progress_bar = st.progress(0)
     status_text = st.empty()
 
     try:
-        status_text.text("📈 正在获取股票数据...")
+        # 1. 预加载基础数据（利用 UI 缓存）
+        status_text.text("📈 正在获取股票基础数据...")
         progress_bar.progress(10)
         bundle = get_stock_data(symbol, period)
 
-        if "error" in bundle.stock_info:
-            st.error(f"❌ {bundle.stock_info['error']}")
-            return
         if bundle.stock_data is None:
             st.error("❌ 无法获取股票历史数据")
             return
-        #渲染股票信息与指标
+
+        # 渲染基础信息（让用户先看到数据）
         display_stock_info(bundle.stock_info, bundle.indicators)
-        progress_bar.progress(20)
-        #渲染股票K线图与成交量图
         display_stock_chart(bundle.stock_data, bundle.stock_info)
         progress_bar.progress(30)
 
-        status_text.text("📊 正在加载财务数据...")
+        # 2. 预加载财务数据
+        status_text.text("📊 正在获取财务数据...")
         financial_data = get_financial_data(symbol)
         progress_bar.progress(40)
 
-        quarterly_data = None
-        fund_flow_data = None
-        sentiment_data = None
-        news_data = None
-        risk_data = None
-
-        if enabled.fundamental:
-            try:
-                quarterly_data = get_quarterly_data(symbol)
-            except Exception as exc:
-                st.warning(f"⚠️ 获取季报数据时出错: {exc}")
-
-        if enabled.fund_flow:
-            try:
-                fund_flow_data = get_fund_flow_data(symbol)
-            except Exception as exc:
-                st.warning(f"⚠️ 获取资金流向数据时出错: {exc}")
-
-        if enabled.sentiment:
-            try:
-                sentiment_data = get_sentiment_data(symbol, period)
-            except Exception as exc:
-                st.warning(f"⚠️ 获取市场情绪数据时出错: {exc}")
-
-        if enabled.news:
-            try:
-                news_data = get_news_data(symbol)
-            except Exception as exc:
-                st.warning(f"⚠️ 获取新闻数据时出错: {exc}")
-
-        if enabled.risk:
-            try:
-                risk_data = get_risk_data(symbol)
-            except Exception as exc:
-                st.warning(f"⚠️ 获取风险数据时出错: {exc}")
-
-        progress_bar.progress(55)
-
-        status_text.text("🔍 AI分析师团队正在分析,请耐心等待几分钟...")
+        # 3. 执行 AI 分析（传入预加载数据以提升性能）
+        status_text.text("🔍 AI分析师团队正在分析，请稍候...")
         with st.spinner("AI团队分析中..."):
-            agents_results, discussion_result, final_decision = run_ai_analysis(
-                stock_info=bundle.stock_info,
-                stock_data=bundle.stock_data,
-                indicators=bundle.indicators,
-                financial_data=financial_data,
-                enabled_analysts=enabled,
+            result = analyze_single_stock_via_use_case(
+                symbol=symbol,
+                period=period,
+                enabled=enabled,
                 selected_model=selected_model,
                 use_cached_agents=True,
-                fund_flow_data=fund_flow_data,
-                sentiment_data=sentiment_data,
-                news_data=news_data,
-                quarterly_data=quarterly_data,
-                risk_data=risk_data,
+                preloaded_bundle=bundle,
+                preloaded_financial_data=financial_data,
             )
+
         progress_bar.progress(85)
 
+        # 4. 渲染分析结果
+        agents_results = result["agents_results"]
+        discussion_result = result["discussion_result"]
+        final_decision = result["final_decision"]
+        record_id = int(result["record_id"])
+
         display_agents_analysis(agents_results)
-        status_text.text("🤝 分析团队正在讨论...")
         display_team_discussion(discussion_result)
-        status_text.text("📋 正在制定最终投资决策...")
         display_final_decision(final_decision, bundle.stock_info, agents_results, discussion_result)
+
         progress_bar.progress(100)
 
         st.session_state.analysis_completed = True
@@ -282,20 +231,7 @@ def _run_single_analysis_ui(symbol: str, period: str, enabled: EnabledAnalysts, 
         st.session_state.final_decision = final_decision
         st.session_state.just_completed = True
 
-        saved, db_error = save_analysis_to_db(
-            symbol=bundle.stock_info.get("symbol", ""),
-            stock_name=bundle.stock_info.get("name", ""),
-            period=period,
-            stock_info=bundle.stock_info,
-            agents_results=agents_results,
-            discussion_result=discussion_result,
-            final_decision=final_decision,
-        )
-        if saved:
-            st.success("✅ 分析记录已保存到数据库")
-        else:
-            st.warning(f"⚠️ 保存到数据库时出现错误: {db_error}")
-
+        st.success(f"✅ 分析完成，记录已保存（ID: {record_id}）")
         status_text.text("✅ 分析完成！")
     except Exception as exc:
         st.error(f"❌ 分析过程中出现错误: {exc}")
@@ -305,67 +241,29 @@ def _run_single_analysis_ui(symbol: str, period: str, enabled: EnabledAnalysts, 
 
 
 def _analyze_single_stock_for_batch(symbol: str, period: str, enabled: EnabledAnalysts, selected_model: str, *, use_cache: bool) -> dict[str, Any]:
-    """执行单只股票分析（批量模式使用），返回结构化结果。"""
+    """执行单只股票分析（批量模式使用），统一使用新架构用例。"""
 
     try:
-        bundle = get_stock_data(symbol, period) if use_cache else get_stock_data_uncached(symbol, period)
-        if "error" in bundle.stock_info:
-            return {"symbol": symbol, "error": bundle.stock_info["error"], "success": False}
-        if bundle.stock_data is None:
-            return {"symbol": symbol, "error": "无法获取股票历史数据", "success": False}
-
-        financial_data = get_financial_data(symbol) if use_cache else get_financial_data_uncached(symbol)
-
-        if use_cache:
-            quarterly_data = get_quarterly_data(symbol) if enabled.fundamental else None
-            fund_flow_data = get_fund_flow_data(symbol) if enabled.fund_flow else None
-            sentiment_data = get_sentiment_data(symbol, period) if enabled.sentiment else None
-            news_data = get_news_data(symbol) if enabled.news else None
-            risk_data = get_risk_data(symbol) if enabled.risk else None
-        else:
-            quarterly_data = get_quarterly_data_uncached(symbol) if enabled.fundamental else None
-            fund_flow_data = get_fund_flow_data_uncached(symbol) if enabled.fund_flow else None
-            sentiment_data = (
-                get_sentiment_data_uncached(symbol, period, use_cache_for_stock_data=False) if enabled.sentiment else None
-            )
-            news_data = get_news_data_uncached(symbol) if enabled.news else None
-            risk_data = get_risk_data_uncached(symbol) if enabled.risk else None
-
-        agents_results, discussion_result, final_decision = run_ai_analysis(
-            stock_info=bundle.stock_info,
-            stock_data=bundle.stock_data,
-            indicators=bundle.indicators,
-            financial_data=financial_data,
-            enabled_analysts=enabled,
+        # 统一使用用例路径
+        result = analyze_single_stock_via_use_case(
+            symbol=symbol,
+            period=period,
+            enabled=enabled,
             selected_model=selected_model,
             use_cached_agents=use_cache,
-            fund_flow_data=fund_flow_data,
-            sentiment_data=sentiment_data,
-            news_data=news_data,
-            quarterly_data=quarterly_data,
-            risk_data=risk_data,
-        )
-
-        saved, db_error = save_analysis_to_db(
-            symbol=bundle.stock_info.get("symbol", ""),
-            stock_name=bundle.stock_info.get("name", ""),
-            period=period,
-            stock_info=bundle.stock_info,
-            agents_results=agents_results,
-            discussion_result=discussion_result,
-            final_decision=final_decision,
         )
 
         return {
             "symbol": symbol,
             "success": True,
-            "stock_info": bundle.stock_info,
-            "indicators": bundle.indicators,
-            "agents_results": agents_results,
-            "discussion_result": discussion_result,
-            "final_decision": final_decision,
-            "saved_to_db": saved,
-            "db_error": db_error,
+            "stock_info": result["stock_info"],
+            "indicators": result["indicators"],
+            "agents_results": result["agents_results"],
+            "discussion_result": result["discussion_result"],
+            "final_decision": result["final_decision"],
+            "saved_to_db": True,  # 用例内部已处理保存
+            "db_error": None,
+            "record_id": result["record_id"],
         }
     except Exception as exc:
         return {"symbol": symbol, "error": str(exc), "success": False}
@@ -455,7 +353,7 @@ def render_home(*, api_key_ok: bool, period: str, selected_model: str) -> None:
         reset_all_analysis_state()
 
         if analysis_mode == "单个分析":
-            _run_single_analysis_ui(stock_input.strip(), period, enabled, selected_model)
+            _run_single_analysis_use_case_ui(stock_input.strip(), period, enabled, selected_model)
         else:
             stock_list = parse_stock_list(stock_input)
             if not stock_list:

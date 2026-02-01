@@ -4,9 +4,12 @@
 """
 
 import time
+import logging
 from typing import Any, Dict, List
 
-from aiagents_stock.ai.deepseek_client import DeepSeekClient
+from aiagents_stock.infrastructure.ai.deepseek_client import DeepSeekClient
+
+logger = logging.getLogger(__name__)
 
 
 class LonghubangAgents:
@@ -15,7 +18,7 @@ class LonghubangAgents:
     def __init__(self, model="deepseek-chat"):
         self.model = model
         self.deepseek_client = DeepSeekClient(model=model)
-        print(f"[智瞰龙虎] AI分析师系统初始化 (模型: {model})")
+        logger.info(f"[智瞰龙虎] AI分析师系统初始化 (模型: {model})")
 
     def youzi_behavior_analyst(self, longhubang_data: str, summary: Dict) -> Dict[str, Any]:
         """
@@ -26,7 +29,7 @@ class LonghubangAgents:
         - 分析游资席位的进出特征
         - 研判游资对个股的态度
         """
-        print("🎯 游资行为分析师正在分析...")
+        logger.info("🎯 游资行为分析师正在分析...")
         time.sleep(1)
 
         # 构建游资统计信息
@@ -105,7 +108,7 @@ class LonghubangAgents:
 
         analysis = self.deepseek_client.call_api(messages, max_tokens=4000)
 
-        print("  ✓ 游资行为分析师分析完成")
+        logger.info("  ✓ 游资行为分析师分析完成")
 
         return {
             "agent_name": "游资行为分析师",
@@ -124,7 +127,7 @@ class LonghubangAgents:
         - 评估股票的上涨潜力
         - 识别次日大概率上涨的股票
         """
-        print("📈 个股潜力分析师正在分析...")
+        logger.info("📈 个股潜力分析师正在分析...")
         time.sleep(1)
 
         # 构建股票统计信息
@@ -206,7 +209,7 @@ class LonghubangAgents:
 
         analysis = self.deepseek_client.call_api(messages, max_tokens=4000)
 
-        print("  ✓ 个股潜力分析师分析完成")
+        logger.info("  ✓ 个股潜力分析师分析完成")
 
         return {
             "agent_name": "个股潜力分析师",
@@ -225,7 +228,7 @@ class LonghubangAgents:
         - 分析题材的炒作周期
         - 预判题材的持续性
         """
-        print("🔥 题材追踪分析师正在分析...")
+        logger.info("🔥 题材追踪分析师正在分析...")
         time.sleep(1)
 
         # 构建概念统计信息
@@ -306,7 +309,7 @@ class LonghubangAgents:
 
         analysis = self.deepseek_client.call_api(messages, max_tokens=4000)
 
-        print("  ✓ 题材追踪分析师分析完成")
+        logger.info("  ✓ 题材追踪分析师分析完成")
 
         return {
             "agent_name": "题材追踪分析师",
@@ -325,7 +328,7 @@ class LonghubangAgents:
         - 分析游资出货信号
         - 提供风险管理建议
         """
-        print("⚠️ 风险控制专家正在分析...")
+        logger.info("⚠️ 风险控制专家正在分析...")
         time.sleep(1)
 
         prompt = f"""
@@ -401,7 +404,7 @@ class LonghubangAgents:
 
         analysis = self.deepseek_client.call_api(messages, max_tokens=4000)
 
-        print("  ✓ 风险控制专家分析完成")
+        logger.info("  ✓ 风险控制专家分析完成")
 
         return {
             "agent_name": "风险控制专家",
@@ -420,7 +423,7 @@ class LonghubangAgents:
         - 给出最终推荐股票清单
         - 提供具体操作策略
         """
-        print("👔 首席策略师正在综合分析...")
+        logger.info("👔 首席策略师正在综合分析...")
         time.sleep(1)
 
         # 整合所有分析师的分析结果
@@ -496,7 +499,7 @@ class LonghubangAgents:
 
         analysis = self.deepseek_client.call_api(messages, max_tokens=5000)
 
-        print("  ✓ 首席策略师分析完成")
+        logger.info("  ✓ 首席策略师分析完成")
 
         return {
             "agent_name": "首席策略师",
@@ -509,9 +512,12 @@ class LonghubangAgents:
 
 # 测试函数
 if __name__ == "__main__":
-    print("=" * 60)
-    print("测试智瞰龙虎AI分析师系统")
-    print("=" * 60)
+    # 配置简单的日志输出到控制台
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    
+    logger.info("=" * 60)
+    logger.info("测试智瞰龙虎AI分析师系统")
+    logger.info("=" * 60)
 
     # 创建模拟数据
     test_summary = {
@@ -534,7 +540,7 @@ if __name__ == "__main__":
     agents = LonghubangAgents()
 
     # 测试游资行为分析师
-    print("\n测试游资行为分析师...")
+    logger.info("\n测试游资行为分析师...")
     result = agents.youzi_behavior_analyst(test_data, test_summary)
-    print(f"分析师: {result['agent_name']}")
-    print(f"分析内容长度: {len(result['analysis'])} 字符")
+    logger.info(f"分析师: {result['agent_name']}")
+    logger.info(f"分析内容长度: {len(result['analysis'])} 字符")

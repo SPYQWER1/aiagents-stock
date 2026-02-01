@@ -408,28 +408,27 @@ class SmartMonitorTDXDataFetcher:
 
 
 if __name__ == "__main__":
-    # 测试代码
     logging.basicConfig(level=logging.INFO)
-
-    # 使用默认地址测试
-    fetcher = SmartMonitorTDXDataFetcher(base_url="http://192.168.1.222:8181")
-
-    # 测试平安银行(000001)
-    print("测试获取平安银行(000001)数据...")
-    data = fetcher.get_comprehensive_data("000001")
-
+    logger = logging.getLogger(__name__)
+    
+    fetcher = SmartMonitorTDXDataFetcher()
+    logger.info("测试获取贵州茅台(600519)数据...")
+    
+    data = fetcher.get_realtime_quote("600519")
     if data:
-        print("\n实时行情:")
-        print(f"  股票名称: {data.get('name')}")
-        print(f"  当前价: {data.get('current_price')} 元")
-        print(f"  涨跌幅: {data.get('change_pct')}%")
-        print(f"  数据源: {data.get('data_source')}")
-
-        print("\n技术指标:")
-        print(f"  MA5: {data.get('ma5', 0):.2f}")
-        print(f"  MA20: {data.get('ma20', 0):.2f}")
-        print(f"  MACD: {data.get('macd', 0):.4f}")
-        print(f"  RSI(6): {data.get('rsi6', 0):.2f}")
-        print(f"  趋势: {data.get('trend')}")
+        logger.info("\n实时行情:")
+        logger.info(f"  当前价: {data.get('current_price')} 元")
+        logger.info(f"  涨跌幅: {data.get('change_pct')}%")
+        
+        logger.info("\n技术指标:")
+        logger.info(f"  MA5: {data.get('ma5', 0):.2f}")
+        logger.info(f"  MA20: {data.get('ma20', 0):.2f}")
+        logger.info(f"  MACD: {data.get('macd', 0):.4f}")
+        logger.info(f"  RSI(6): {data.get('rsi6', 0):.2f}")
+        
+        if "main_force" in data:
+            logger.info("\n主力资金:")
+            logger.info(f"  主力净额: {data['main_force']['main_net']:.2f}万")
+            logger.info(f"  主力动向: {data['main_force']['trend']}")
     else:
-        print("获取数据失败")
+        logger.error("获取数据失败")

@@ -403,10 +403,11 @@ if __name__ == "__main__":
 
     # 测试获取K线数据
     df = kline.get_kline_data("600519", days=60)
+    logger = logging.getLogger(__name__)
 
     if df is not None:
-        print(f"获取到 {len(df)} 条K线数据")
-        print(df.head())
+        logger.info(f"获取到 {len(df)} 条K线数据")
+        logger.debug(df.head())
 
         # 模拟AI决策
         ai_decisions = [
@@ -442,6 +443,6 @@ if __name__ == "__main__":
 
         # 保存为HTML
         fig.write_html("test_kline.html")
-        print("K线图已保存到 test_kline.html")
+        logger.info("K线图已保存到 test_kline.html")
     else:
-        print("获取K线数据失败")
+        logger.error("获取K线数据失败")

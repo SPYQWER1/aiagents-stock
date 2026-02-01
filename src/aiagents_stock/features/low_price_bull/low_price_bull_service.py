@@ -287,10 +287,7 @@ class LowPriceBullService:
             self.logger.error(f"请检查.env中的TDX_BASE_URL配置: {self.tdx_api_url}")
             return None, None, None
         except Exception as e:
-            self.logger.error(f"获取股票数据失败 {stock_code}: {e}")
-            import traceback
-
-            traceback.print_exc()
+            self.logger.error(f"获取股票数据失败 {stock_code}: {e}", exc_info=True)
             return None, None, None
 
     def _process_alerts(self):

@@ -68,4 +68,3 @@ def set_current_view(view: View) -> None:
     """设置当前视图。"""
 
     st.session_state[SESSION_KEY_VIEW] = view.value
-

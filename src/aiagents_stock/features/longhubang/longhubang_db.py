@@ -516,9 +516,13 @@ class LonghubangDatabase:
 
 # 测试函数
 if __name__ == "__main__":
-    print("=" * 60)
-    print("测试智瞰龙虎数据库模块")
-    print("=" * 60)
+    # 配置基本日志
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logger = logging.getLogger(__name__)
+
+    logger.info("=" * 60)
+    logger.info("测试智瞰龙虎数据库模块")
+    logger.info("=" * 60)
 
     db = LonghubangDatabase(os.path.join("database_files", "test_longhubang.db"))
 
@@ -543,8 +547,8 @@ if __name__ == "__main__":
 
     # 测试查询
     df = db.get_longhubang_data()
-    print(f"\n查询到 {len(df)} 条记录")
+    logger.info(f"\n查询到 {len(df)} 条记录")
 
     # 获取统计信息
     stats = db.get_statistics()
-    print(f"\n数据库统计: {stats}")
+    logger.info(f"\n数据库统计: {stats}")

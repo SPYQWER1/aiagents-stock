@@ -28,11 +28,17 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
+import logging
 
 import streamlit as st
+from aiagents_stock.infrastructure.logging_config import setup_logging
+
+# 初始化日志
+setup_logging(log_dir="logs", log_level=logging.INFO)
 
 if TYPE_CHECKING:
     from aiagents_stock.web.navigation import View
+
 
 def _ensure_src_on_path() -> None:
     """
@@ -63,61 +69,73 @@ def _render_current_view(*, view: "View", api_key_ok: bool, period: str, selecte
 
     if view == View.HISTORY:
         from aiagents_stock.web.pages.history import render_history
+
         render_history()
         return
 
     if view == View.MONITOR:
         from aiagents_stock.features.monitor.monitor_manager import display_monitor_manager
+
         display_monitor_manager()
         return
 
     if view == View.MAIN_FORCE:
         from aiagents_stock.features.main_force.main_force_ui import display_main_force_selector
+
         display_main_force_selector()
         return
 
     if view == View.LOW_PRICE_BULL:
         from aiagents_stock.features.low_price_bull.low_price_bull_ui import display_low_price_bull
+
         display_low_price_bull()
         return
 
     if view == View.SMALL_CAP:
         from aiagents_stock.features.small_cap.small_cap_ui import display_small_cap
+
         display_small_cap()
         return
 
     if view == View.PROFIT_GROWTH:
         from aiagents_stock.features.profit_growth.profit_growth_ui import display_profit_growth
+
         display_profit_growth()
         return
 
     if view == View.SECTOR_STRATEGY:
         from aiagents_stock.features.sector_strategy.sector_strategy_ui import display_sector_strategy
+
         display_sector_strategy()
         return
 
     if view == View.LONGHUBANG:
         from aiagents_stock.features.longhubang.longhubang_ui import display_longhubang
+
         display_longhubang()
         return
 
     if view == View.SMART_MONITOR:
         from aiagents_stock.features.smart_monitor.smart_monitor_ui import smart_monitor_ui
+
         smart_monitor_ui()
         return
 
     if view == View.PORTFOLIO:
         from aiagents_stock.features.portfolio.portfolio_ui import display_portfolio_manager
+
         display_portfolio_manager()
         return
 
     if view == View.CONFIG:
         from aiagents_stock.web.pages.config_page import render_config_page
+
         render_config_page()
         return
 
     # 默认渲染主页
     from aiagents_stock.web.pages.home import render_home
+
     render_home(api_key_ok=api_key_ok, period=period, selected_model=selected_model)
 
 
@@ -146,7 +164,7 @@ def main() -> None:
         layout=APP_LAYOUT,
         initial_sidebar_state=APP_INITIAL_SIDEBAR_STATE,
     )
-    
+
     # 应用全局样式
     apply_global_styles()
 

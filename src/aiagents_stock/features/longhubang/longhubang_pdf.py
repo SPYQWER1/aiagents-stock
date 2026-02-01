@@ -2,6 +2,7 @@
 智瞰龙虎PDF报告生成模块
 """
 
+import logging
 import os
 import tempfile
 from datetime import datetime
@@ -21,6 +22,7 @@ class LonghubangPDFGenerator:
 
     def __init__(self):
         """初始化PDF生成器"""
+        self.logger = logging.getLogger(__name__)
         self.setup_fonts()
 
     def setup_fonts(self):
@@ -38,17 +40,17 @@ class LonghubangPDFGenerator:
                     try:
                         pdfmetrics.registerFont(TTFont("ChineseFont", font_path))
                         self.chinese_font = "ChineseFont"
-                        print(f"[PDF] 成功加载字体: {font_path}")
+                        self.logger.info(f"[PDF] 成功加载字体: {font_path}")
                         return
                     except Exception:
                         continue
 
             # 如果都失败，使用默认字体
             self.chinese_font = "Helvetica"
-            print("[PDF] 警告: 未找到中文字体，使用默认字体")
+            self.logger.warning("[PDF] 未找到中文字体，使用默认字体")
 
         except Exception as e:
-            print(f"[PDF] 字体设置失败: {e}")
+            self.logger.error(f"[PDF] 字体设置失败: {e}")
             self.chinese_font = "Helvetica"
 
     def generate_pdf(self, result_data: dict, output_path: str = None) -> str:
@@ -100,14 +102,11 @@ class LonghubangPDFGenerator:
             # 生成PDF
             doc.build(story)
 
-            print(f"[PDF] 龙虎榜报告生成成功: {output_path}")
+            self.logger.info(f"[PDF] 龙虎榜报告生成成功: {output_path}")
             return output_path
 
         except Exception as e:
-            print(f"[PDF] 生成失败: {e}")
-            import traceback
-
-            traceback.print_exc()
+            self.logger.error(f"[PDF] 生成失败: {e}", exc_info=True)
             raise
 
     def _get_styles(self) -> dict:
@@ -446,9 +445,12 @@ class LonghubangPDFGenerator:
 
 # 测试函数
 if __name__ == "__main__":
-    print("=" * 60)
-    print("测试智瞰龙虎PDF生成模块")
-    print("=" * 60)
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
+    logger.info("=" * 60)
+    logger.info("测试智瞰龙虎PDF生成模块")
+    logger.info("=" * 60)
 
     # 创建测试数据
     test_data = {
@@ -483,4 +485,4 @@ if __name__ == "__main__":
     # 生成PDF
     generator = LonghubangPDFGenerator()
     pdf_path = generator.generate_pdf(test_data)
-    print(f"\nPDF已生成: {pdf_path}")
+    logger.info(f"\nPDF已生成: {pdf_path}")

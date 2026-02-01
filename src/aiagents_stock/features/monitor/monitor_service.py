@@ -7,10 +7,13 @@ from typing import Dict, List
 
 import streamlit as st
 
-from aiagents_stock.data.stock_data import StockDataFetcher
+from aiagents_stock.infrastructure.market_data_provider import is_chinese_stock
+from aiagents_stock.web.di_container import DIContainer
 from aiagents_stock.features.monitor.monitor_db import monitor_db
 from aiagents_stock.integrations.miniqmt_interface import miniqmt
 from aiagents_stock.notifications.notification_service import notification_service
+
+logger = logging.getLogger(__name__)
 
 # 导入TDX数据源（如果可用）
 try:
@@ -19,14 +22,15 @@ try:
     TDX_AVAILABLE = True
 except ImportError:
     TDX_AVAILABLE = False
-    logging.warning("TDX数据源模块未找到，将使用默认数据源")
+    logger.warning("TDX数据源模块未找到，将使用默认数据源")
+
 
 
 class StockMonitorService:
     """股票监测服务"""
 
     def __init__(self):
-        self.fetcher = StockDataFetcher()
+        self.provider = DIContainer.get_market_data_provider()
 
         # 初始化TDX数据源（如果启用）
         self.tdx_fetcher = None
@@ -40,9 +44,9 @@ class StockMonitorService:
             try:
                 self.tdx_fetcher = SmartMonitorTDXDataFetcher(base_url=tdx_base_url)
                 self.use_tdx = True
-                logging.info(f"✅ TDX数据源已启用: {tdx_base_url}")
+                logger.info(f"✅ TDX数据源已启用: {tdx_base_url}")
             except Exception as e:
-                logging.warning(f"TDX数据源初始化失败，将使用默认数据源: {e}")
+                logger.warning(f"TDX数据源初始化失败，将使用默认数据源: {e}")
 
         self.running = False
         self.thread = None
@@ -66,14 +70,14 @@ class StockMonitorService:
 
     def _monitor_loop(self):
         """监测循环"""
-        print("监测服务已启动")
+        logger.info("监测服务已启动")
         while self.running:
             try:
                 self._check_all_stocks()
                 # 根据最小监测间隔决定循环间隔，最少5分钟检查一次
                 time.sleep(300)  # 每5分钟检查一次
             except Exception as e:
-                print(f"监测服务错误: {e}")
+                logger.error(f"监测服务错误: {e}", exc_info=True)
                 time.sleep(60)  # 错误后等待1分钟再重试
 
     def _check_all_stocks(self):
@@ -93,11 +97,11 @@ class StockMonitorService:
                 if current_time < next_check:
                     # 显示距离下次检查的时间
                     time_left = (next_check - current_time).total_seconds() / 60
-                    print(f"股票 {stock['symbol']} 距离下次检查还有 {time_left:.1f} 分钟")
+                    logger.debug(f"股票 {stock['symbol']} 距离下次检查还有 {time_left:.1f} 分钟")
                     continue
 
             try:
-                print(f"正在更新股票 {stock['symbol']} 的价格...")
+                logger.info(f"正在更新股票 {stock['symbol']} 的价格...")
                 self._update_stock_price(stock)
                 updated_count += 1
 
@@ -105,11 +109,11 @@ class StockMonitorService:
                 if updated_count < len(stocks):
                     time.sleep(3)  # 每个股票之间等待3秒
             except Exception as e:
-                print(f"❌ 更新股票 {stock['symbol']} 价格失败: {e}")
+                logger.error(f"❌ 更新股票 {stock['symbol']} 价格失败: {e}")
                 time.sleep(3)  # 失败后也等待3秒再继续
 
         if updated_count > 0:
-            print(f"✅ 本轮共更新了 {updated_count} 只股票")
+            logger.info(f"✅ 本轮共更新了 {updated_count} 只股票")
 
     def _update_stock_price(self, stock: Dict):
         """更新股票价格并检查条件"""
@@ -120,15 +124,15 @@ class StockMonitorService:
         try:
             # 优先使用TDX数据源（如果已启用且为A股）
             if self.use_tdx and self._is_a_stock(symbol):
-                print(f"🔄 使用TDX数据源获取 {symbol} 行情...")
+                logger.debug(f"🔄 使用TDX数据源获取 {symbol} 行情...")
                 quote = self.tdx_fetcher.get_realtime_quote(symbol)
 
                 if quote and quote.get("current_price"):
                     current_price = float(quote["current_price"])
-                    print(f"✅ TDX获取成功: {symbol} 当前价格: ¥{current_price}")
+                    logger.debug(f"✅ TDX获取成功: {symbol} 当前价格: ¥{current_price}")
                 else:
                     # TDX失败，降级到默认数据源
-                    print(f"⚠️ TDX获取失败，降级到默认数据源: {symbol}")
+                    logger.warning(f"⚠️ TDX获取失败，降级到默认数据源: {symbol}")
                     current_price = self._get_price_from_default_source(symbol)
             else:
                 # 使用默认数据源（AKShare/yfinance）
@@ -140,21 +144,21 @@ class StockMonitorService:
                     current_price = float(current_price)
                     # 更新数据库（包括更新last_checked时间）
                     monitor_db.update_stock_price(stock["id"], current_price)
-                    print(f"✅ {symbol} 当前价格: ¥{current_price}")
+                    logger.info(f"✅ {symbol} 当前价格: ¥{current_price}")
 
                     # 检查触发条件
                     self._check_trigger_conditions(stock, current_price)
                 except (ValueError, TypeError):
-                    print(f"❌ 股票 {symbol} 价格格式错误: {current_price}")
+                    logger.error(f"❌ 股票 {symbol} 价格格式错误: {current_price}")
                     # 即使失败也更新last_checked，避免持续重试
                     monitor_db.update_last_checked(stock["id"])
             else:
-                print(f"⚠️ 无法获取股票 {symbol} 的当前价格")
+                logger.warning(f"⚠️ 无法获取股票 {symbol} 的当前价格")
                 # 更新last_checked，避免持续重试
                 monitor_db.update_last_checked(stock["id"])
 
         except Exception as e:
-            print(f"❌ 获取股票 {symbol} 数据失败: {e}")
+            logger.error(f"❌ 获取股票 {symbol} 数据失败: {e}")
             # 即使失败也更新last_checked，避免持续重试
             try:
                 monitor_db.update_last_checked(stock["id"])
@@ -163,19 +167,19 @@ class StockMonitorService:
 
     def _is_a_stock(self, symbol: str) -> bool:
         """判断是否为A股（6位数字）"""
-        return symbol.isdigit() and len(symbol) == 6
+        return is_chinese_stock(symbol)
 
     def _get_price_from_default_source(self, symbol: str) -> float:
         """从默认数据源获取价格"""
         try:
-            stock_info = self.fetcher.get_stock_info(symbol)
+            stock_info = self.provider.get_stock_info(symbol=symbol)
             current_price = stock_info.get("current_price")
 
             if current_price and current_price != "N/A":
                 return float(current_price)
             return None
         except Exception as e:
-            print(f"默认数据源获取失败: {e}")
+            logger.error(f"默认数据源获取失败: {e}")
             return None
 
     def _check_trigger_conditions(self, stock: Dict, current_price: float):
@@ -235,13 +239,13 @@ class StockMonitorService:
         try:
             # 检查MiniQMT是否连接
             if not miniqmt.is_connected():
-                print(f"MiniQMT未连接，无法执行 {stock['symbol']} 的量化交易")
+                logger.warning(f"MiniQMT未连接，无法执行 {stock['symbol']} 的量化交易")
                 return
 
             # 获取量化配置
             quant_config = stock.get("quant_config", {})
             if not quant_config:
-                print(f"股票 {stock['symbol']} 未配置量化参数")
+                logger.warning(f"股票 {stock['symbol']} 未配置量化参数")
                 return
 
             # 执行策略信号
@@ -251,16 +255,16 @@ class StockMonitorService:
             success, msg = miniqmt.execute_strategy_signal(stock["id"], stock["symbol"], signal, position_size)
 
             if success:
-                print(f"✅ 量化交易成功: {stock['symbol']} - {msg}")
+                logger.info(f"✅ 量化交易成功: {stock['symbol']} - {msg}")
                 # 记录交易通知（量化交易通知不检查重复，因为每次交易都应该通知）
                 monitor_db.add_notification(stock["id"], "quant_trade", f"量化交易执行: {msg}")
                 # 立即发送通知（包括邮件）
                 notification_service.send_notifications()
             else:
-                print(f"❌ 量化交易失败: {stock['symbol']} - {msg}")
+                logger.error(f"❌ 量化交易失败: {stock['symbol']} - {msg}")
 
         except Exception as e:
-            print(f"执行量化交易异常: {stock['symbol']} - {str(e)}")
+            logger.error(f"执行量化交易异常: {stock['symbol']} - {str(e)}", exc_info=True)
 
     def get_stocks_needing_update(self) -> List[Dict]:
         """获取需要更新价格的股票"""

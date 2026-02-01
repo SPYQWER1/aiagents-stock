@@ -4,6 +4,7 @@
 """
 
 import os
+import logging
 from datetime import datetime
 
 import pandas as pd
@@ -11,6 +12,8 @@ from dotenv import load_dotenv
 
 # 加载环境变量
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 class DataSourceManager:
@@ -29,12 +32,12 @@ class DataSourceManager:
                 ts.set_token(self.tushare_token)
                 self.tushare_api = ts.pro_api()
                 self.tushare_available = True
-                print("✅ Tushare数据源初始化成功")
+                logger.info("✅ Tushare数据源初始化成功")
             except Exception as e:
-                print(f"⚠️ Tushare数据源初始化失败: {e}")
+                logger.warning(f"⚠️ Tushare数据源初始化失败: {e}")
                 self.tushare_available = False
         else:
-            print("ℹ️ 未配置Tushare Token，将仅使用Akshare数据源")
+            logger.info("ℹ️ 未配置Tushare Token，将仅使用Akshare数据源")
 
     def get_stock_hist_data(self, symbol, start_date=None, end_date=None, adjust="qfq"):
         """
@@ -62,7 +65,7 @@ class DataSourceManager:
         try:
             import akshare as ak
 
-            print(f"[Akshare] 正在获取 {symbol} 的历史数据...")
+            logger.info(f"[Akshare] 正在获取 {symbol} 的历史数据...")
 
             # 使用akshare的股票历史数据接口
             df = ak.stock_zh_a_hist(
@@ -88,15 +91,15 @@ class DataSourceManager:
                 )
                 # 转换日期列为datetime类型
                 df["date"] = pd.to_datetime(df["date"])
-                print(f"[Akshare] ✅ 成功获取 {len(df)} 条数据")
+                logger.info(f"[Akshare] ✅ 成功获取 {len(df)} 条数据")
                 return df
         except Exception as e:
-            print(f"[Akshare] ❌ 获取失败: {e}")
+            logger.warning(f"[Akshare] ❌ 获取失败: {e}")
 
         # akshare失败，尝试使用tushare作为备用数据源
         if self.tushare_available:
             try:
-                print(f"[Tushare] 正在获取 {symbol} 的历史数据（备用数据源）...")
+                logger.info(f"[Tushare] 正在获取 {symbol} 的历史数据（备用数据源）...")
 
                 # 转换股票代码格式（添加市场后缀，如000001.SZ）
                 ts_code = self._convert_to_ts_code(symbol)
@@ -121,13 +124,13 @@ class DataSourceManager:
                     # 转换成交额单位（tushare单位是千元，转换为元）
                     df["amount"] = df["amount"] * 1000
 
-                    print(f"[Tushare] ✅ 成功获取 {len(df)} 条数据")
+                    logger.info(f"[Tushare] ✅ 成功获取 {len(df)} 条数据")
                     return df
             except Exception as e:
-                print(f"[Tushare] ❌ 获取失败: {e}")
+                logger.warning(f"[Tushare] ❌ 获取失败: {e}")
 
         # 两个数据源都失败
-        print("❌ 所有数据源均获取失败")
+        logger.error("❌ 所有数据源均获取失败")
         return None
 
     def get_stock_basic_info(self, symbol):
@@ -146,7 +149,7 @@ class DataSourceManager:
         try:
             import akshare as ak
 
-            print(f"[Akshare] 正在获取 {symbol} 的基本信息...")
+            logger.info(f"[Akshare] 正在获取 {symbol} 的基本信息...")
 
             stock_info = ak.stock_individual_info_em(symbol=symbol)
             if stock_info is not None and not stock_info.empty:
@@ -165,15 +168,15 @@ class DataSourceManager:
                     elif key == "流通市值":
                         info["circulating_market_cap"] = value
 
-                print("[Akshare] ✅ 成功获取基本信息")
+                logger.info("[Akshare] ✅ 成功获取基本信息")
                 return info
         except Exception as e:
-            print(f"[Akshare] ❌ 获取失败: {e}")
+            logger.warning(f"[Akshare] ❌ 获取失败: {e}")
 
         # akshare失败，尝试tushare
         if self.tushare_available:
             try:
-                print(f"[Tushare] 正在获取 {symbol} 的基本信息（备用数据源）...")
+                logger.info(f"[Tushare] 正在获取 {symbol} 的基本信息（备用数据源）...")
 
                 ts_code = self._convert_to_ts_code(symbol)
                 df = self.tushare_api.stock_basic(ts_code=ts_code, fields="ts_code,name,area,industry,market,list_date")
@@ -184,10 +187,10 @@ class DataSourceManager:
                     info["market"] = df.iloc[0]["market"]
                     info["list_date"] = df.iloc[0]["list_date"]
 
-                    print("[Tushare] ✅ 成功获取基本信息")
+                    logger.info("[Tushare] ✅ 成功获取基本信息")
                     return info
             except Exception as e:
-                print(f"[Tushare] ❌ 获取失败: {e}")
+                logger.warning(f"[Tushare] ❌ 获取失败: {e}")
 
         return info
 
@@ -207,7 +210,7 @@ class DataSourceManager:
         try:
             import akshare as ak
 
-            print(f"[Akshare] 正在获取 {symbol} 的实时行情...")
+            logger.info(f"[Akshare] 正在获取 {symbol} 的实时行情...")
 
             df = ak.stock_zh_a_spot_em()
             stock_df = df[df["代码"] == symbol]
@@ -227,15 +230,15 @@ class DataSourceManager:
                     "open": row["今开"],
                     "pre_close": row["昨收"],
                 }
-                print("[Akshare] ✅ 成功获取实时行情")
+                logger.info("[Akshare] ✅ 成功获取实时行情")
                 return quotes
         except Exception as e:
-            print(f"[Akshare] ❌ 获取失败: {e}")
+            logger.warning(f"[Akshare] ❌ 获取失败: {e}")
 
         # akshare失败，尝试tushare
         if self.tushare_available:
             try:
-                print(f"[Tushare] 正在获取 {symbol} 的实时行情（备用数据源）...")
+                logger.info(f"[Tushare] 正在获取 {symbol} 的实时行情（备用数据源）...")
 
                 ts_code = self._convert_to_ts_code(symbol)
                 df = self.tushare_api.daily(
@@ -257,10 +260,10 @@ class DataSourceManager:
                         "open": row["open"],
                         "pre_close": row["pre_close"],
                     }
-                    print("[Tushare] ✅ 成功获取实时行情")
+                    logger.info("[Tushare] ✅ 成功获取实时行情")
                     return quotes
             except Exception as e:
-                print(f"[Tushare] ❌ 获取失败: {e}")
+                logger.error(f"[Tushare] ❌ 获取失败: {e}", exc_info=True)
 
         return quotes
 
@@ -279,7 +282,7 @@ class DataSourceManager:
         try:
             import akshare as ak
 
-            print(f"[Akshare] 正在获取 {symbol} 的财务数据...")
+            logger.info(f"[Akshare] 正在获取 {symbol} 的财务数据...")
 
             if report_type == "income":
                 df = ak.stock_financial_report_sina(stock=symbol, symbol="利润表")
@@ -291,15 +294,15 @@ class DataSourceManager:
                 df = None
 
             if df is not None and not df.empty:
-                print("[Akshare] ✅ 成功获取财务数据")
+                logger.info("[Akshare] ✅ 成功获取财务数据")
                 return df
         except Exception as e:
-            print(f"[Akshare] ❌ 获取失败: {e}")
+            logger.warning(f"[Akshare] ❌ 获取失败: {e}")
 
         # akshare失败，尝试tushare
         if self.tushare_available:
             try:
-                print(f"[Tushare] 正在获取 {symbol} 的财务数据（备用数据源）...")
+                logger.info(f"[Tushare] 正在获取 {symbol} 的财务数据（备用数据源）...")
 
                 ts_code = self._convert_to_ts_code(symbol)
 
@@ -313,10 +316,10 @@ class DataSourceManager:
                     df = None
 
                 if df is not None and not df.empty:
-                    print("[Tushare] ✅ 成功获取财务数据")
+                    logger.info("[Tushare] ✅ 成功获取财务数据")
                     return df
             except Exception as e:
-                print(f"[Tushare] ❌ 获取失败: {e}")
+                logger.warning(f"[Tushare] ❌ 获取失败: {e}")
 
         return None
 

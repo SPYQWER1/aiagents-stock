@@ -59,8 +59,7 @@ def _render_help() -> None:
     """渲染侧边栏帮助信息。"""
 
     with st.sidebar.expander("💡 使用帮助"):
-        st.markdown(
-            """
+        st.markdown("""
             **股票代码格式**
             - 🇨🇳 A股：6位数字（如600519）
             - 🇭🇰 港股：1-5位数字（如700、00700）或HK前缀（如HK00700）
@@ -78,8 +77,7 @@ def _render_help() -> None:
             3. 基本面分析 → 4. 资金分析
             5. 情绪数据(ARBR) → 6. 新闻(qstock)
             7. AI团队分析 → 8. 团队讨论 → 9. 决策
-            """
-        )
+            """)
 
 
 def render_sidebar() -> SidebarState:
@@ -125,7 +123,9 @@ def render_sidebar() -> SidebarState:
             if st.button("📊 持仓分析", width="stretch", key="nav_portfolio", help="投资组合分析与定时跟踪"):
                 set_current_view(View.PORTFOLIO)
                 st.rerun()
-            if st.button("🤖 AI盯盘", width="stretch", key="nav_smart_monitor", help="DeepSeek AI自动盯盘决策交易（支持A股T+1）"):
+            if st.button(
+                "🤖 AI盯盘", width="stretch", key="nav_smart_monitor", help="DeepSeek AI自动盯盘决策交易（支持A股T+1）"
+            ):
                 set_current_view(View.SMART_MONITOR)
                 st.rerun()
             if st.button("📡 实时监测", width="stretch", key="nav_monitor", help="价格监控与预警提醒"):

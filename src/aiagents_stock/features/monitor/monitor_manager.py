@@ -12,7 +12,7 @@ from typing import Dict
 
 import streamlit as st
 
-from aiagents_stock.data.stock_data import StockDataFetcher
+from aiagents_stock.web.di_container import DIContainer
 from aiagents_stock.features.monitor.monitor_db import monitor_db
 from aiagents_stock.features.monitor.monitor_service import monitor_service
 from aiagents_stock.integrations.miniqmt_interface import get_miniqmt_status, miniqmt
@@ -109,8 +109,8 @@ def display_add_stock_section():
             if symbol:
                 if st.button("🔍 获取股票信息"):
                     with st.spinner("正在获取股票信息..."):
-                        fetcher = StockDataFetcher()
-                        stock_info = fetcher.get_stock_info(symbol)
+                        provider = DIContainer.get_market_data_provider()
+                        stock_info = provider.get_stock_info(symbol=symbol)
 
                         if "error" not in stock_info:
                             st.success("✅ 股票信息获取成功")

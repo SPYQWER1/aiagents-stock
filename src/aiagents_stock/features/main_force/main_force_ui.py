@@ -4,6 +4,7 @@
 主力选股UI模块
 """
 
+import logging
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -16,6 +17,7 @@ from aiagents_stock.features.main_force.main_force_pdf_generator import display_
 
 def display_main_force_selector():
     """显示主力选股界面"""
+    logger = logging.getLogger(__name__)
 
     # 检查是否触发批量分析（不立即删除标志）
     if st.session_state.get("main_force_batch_trigger"):
@@ -629,24 +631,25 @@ def run_main_force_batch_analysis():
 
         else:
             # 并行分析
+            logger = logging.getLogger(__name__)
             status_text.text(f"并行分析 {len(stock_codes)} 只股票（{max_workers}线程）...")
-            print(f"\n{'='*60}")
-            print(f"🚀 开始并行分析 {len(stock_codes)} 只股票")
-            print(f"{'='*60}")
+            logger.info(f"\n{'='*60}")
+            logger.info(f"🚀 开始并行分析 {len(stock_codes)} 只股票")
+            logger.info(f"{'='*60}")
 
             def analyze_one(code):
                 try:
-                    print(f"  开始分析: {code}")
+                    logger.info(f"  开始分析: {code}")
                     result = analyze_single_stock_for_batch(
                         symbol=code,
                         period=period,
                         enabled_analysts_config=enabled_analysts_config,
                         selected_model=selected_model,
                     )
-                    print(f"  完成分析: {code}")
+                    logger.info(f"  完成分析: {code}")
                     return result
                 except Exception as e:
-                    print(f"  分析失败: {code} - {str(e)}")
+                    logger.error(f"  分析失败: {code} - {str(e)}")
                     return {"symbol": code, "success": False, "error": str(e)}
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -660,19 +663,19 @@ def run_main_force_batch_analysis():
                     progress_bar.progress(progress)
                     status_text.text(f"已完成 {completed}/{len(stock_codes)} ({code})")
 
-                    print(f"  进度更新: {completed}/{len(stock_codes)} ({progress*100:.1f}%) - {code}")
+                    logger.info(f"  进度更新: {completed}/{len(stock_codes)} ({progress*100:.1f}%) - {code}")
 
                     try:
                         result = future.result()
                         results.append(result)
                     except Exception as e:
-                        print(f"  获取结果失败: {code} - {str(e)}")
+                        logger.error(f"  获取结果失败: {code} - {str(e)}")
                         results.append({"symbol": code, "success": False, "error": str(e)})
 
-            print("\n✅ 所有并行任务已完成")
-            print(f"   完成数: {completed}")
-            print(f"   结果数: {len(results)}")
-            print(f"{'='*60}\n")
+            logger.info("\n✅ 所有并行任务已完成")
+            logger.info(f"   完成数: {completed}")
+            logger.info(f"   结果数: {len(results)}")
+            logger.info(f"{'='*60}\n")
 
         # 清除进度
         progress_bar.empty()
@@ -704,24 +707,22 @@ def run_main_force_batch_analysis():
             from aiagents_stock.features.main_force.main_force_batch_db import batch_db
 
             # 调试信息
-            print(f"\n{'='*60}")
-            print("📝 准备保存批量分析结果到历史记录")
-            print(f"{'='*60}")
-            print(f"股票代码数: {len(stock_codes)}")
-            print(f"分析模式: {analysis_mode}")
-            print(f"成功数: {success_count}")
-            print(f"失败数: {failed_count}")
-            print(f"总耗时: {elapsed_time:.2f}秒")
-            print(f"结果数: {len(results)}")
+            logger.info("📝 准备保存批量分析结果到历史记录")
+            logger.info(f"股票代码数: {len(stock_codes)}")
+            logger.info(f"分析模式: {analysis_mode}")
+            logger.info(f"成功数: {success_count}")
+            logger.info(f"失败数: {failed_count}")
+            logger.info(f"总耗时: {elapsed_time:.2f}秒")
+            logger.info(f"结果数: {len(results)}")
 
             # 检查结果数据类型
-            print("\n检查结果数据类型:")
+            logger.debug("\n检查结果数据类型:")
             for i, result in enumerate(results[:3]):  # 只检查前3个
-                print(f"  结果 {i+1}:")
+                logger.debug(f"  结果 {i+1}:")
                 for key, value in list(result.items())[:5]:  # 只检查前5个字段
-                    print(f"    - {key}: {type(value).__name__}")
+                    logger.debug(f"    - {key}: {type(value).__name__}")
 
-            print("\n开始保存到数据库...")
+            logger.info("\n开始保存到数据库...")
             save_start = time.time()
 
             # 保存到数据库
@@ -735,23 +736,14 @@ def run_main_force_batch_analysis():
             )
 
             save_elapsed = time.time() - save_start
-            print("✅ 批量分析结果已保存到历史记录")
-            print(f"   记录ID: {record_id}")
-            print(f"   保存耗时: {save_elapsed:.2f}秒")
-            print(f"{'='*60}\n")
+            logger.info("✅ 批量分析结果已保存到历史记录")
+            logger.info(f"   记录ID: {record_id}")
+            logger.info(f"   保存耗时: {save_elapsed:.2f}秒")
             save_success = True
 
         except Exception as e:
-            import traceback
-
             save_error = str(e)
-            print(f"\n{'='*60}")
-            print("⚠️ 保存历史记录失败")
-            print(f"{'='*60}")
-            print(f"错误信息: {str(e)}")
-            print("详细错误:")
-            print(traceback.format_exc())
-            print(f"{'='*60}\n")
+            logger.error("⚠️ 保存历史记录失败", exc_info=True)
 
         # 保存结果到session_state
         st.session_state.main_force_batch_results = {

@@ -168,4 +168,3 @@ def display_detailed_cards(results: list[dict[str, Any]], period: str) -> None:
         display_final_decision(final_decision, stock_info, agents_results, discussion_result)
     except Exception as exc:
         st.error(f"显示详细信息时出错: {exc}")
-

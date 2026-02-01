@@ -157,7 +157,6 @@ def display_agents_analysis(agents_results: dict[str, dict[str, Any]]) -> None:
                 f"""
             <div class="agent-card">
                 <h4>👨‍💼 {agent_result.get('agent_name', '未知')}</h4>
-                <p><strong>职责：</strong>{agent_result.get('agent_role', '未知')}</p>
                 <p><strong>关注领域：</strong>{', '.join(agent_result.get('focus_areas', []))}</p>
                 <p><strong>分析时间：</strong>{agent_result.get('timestamp', '未知')}</p>
             </div>
@@ -240,7 +239,11 @@ def display_final_decision(
                 unsafe_allow_html=True,
             )
     else:
-        decision_text = final_decision.get("decision_text", str(final_decision)) if isinstance(final_decision, dict) else str(final_decision)
+        decision_text = (
+            final_decision.get("decision_text", str(final_decision))
+            if isinstance(final_decision, dict)
+            else str(final_decision)
+        )
         st.write(decision_text)
 
     st.markdown("---")
@@ -248,4 +251,3 @@ def display_final_decision(
         display_pdf_export_section(stock_info, agents_results, discussion_result, final_decision)
     else:
         st.warning("⚠️ PDF导出功能需要完整的分析数据")
-

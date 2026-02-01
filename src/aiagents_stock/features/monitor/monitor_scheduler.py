@@ -6,6 +6,7 @@
 """
 
 import json
+import logging
 import os
 import threading
 import time
@@ -19,6 +20,7 @@ class TradingTimeScheduler:
     """交易时间调度器"""
 
     def __init__(self, monitor_service):
+        self.logger = logging.getLogger(__name__)
         self.monitor_service = monitor_service
         self.running = False
         self.thread = None
@@ -48,7 +50,7 @@ class TradingTimeScheduler:
                     # 合并配置，保留默认值
                     default_config.update(loaded_config)
             except Exception as e:
-                print(f"加载调度配置失败，使用默认配置: {e}")
+                self.logger.error(f"加载调度配置失败，使用默认配置: {e}")
 
         return default_config
 
@@ -58,9 +60,9 @@ class TradingTimeScheduler:
         try:
             with open(config_file, "w", encoding="utf-8") as f:
                 json.dump(self.config, f, indent=2, ensure_ascii=False)
-            print("✅ 调度配置已保存")
+            self.logger.info("✅ 调度配置已保存")
         except Exception as e:
-            print(f"❌ 保存调度配置失败: {e}")
+            self.logger.error(f"❌ 保存调度配置失败: {e}", exc_info=True)
 
     def update_config(self, **kwargs):
         """更新配置"""
@@ -126,17 +128,17 @@ class TradingTimeScheduler:
     def start_scheduler(self):
         """启动调度器"""
         if self.running:
-            print("⚠️ 调度器已在运行")
+            self.logger.warning("⚠️ 调度器已在运行")
             return
 
         if not self.config.get("enabled", False):
-            print("⚠️ 调度器未启用")
+            self.logger.warning("⚠️ 调度器未启用")
             return
 
         self.running = True
         self.thread = threading.Thread(target=self._schedule_loop, daemon=True)
         self.thread.start()
-        print("✅ 调度器已启动")
+        self.logger.info("✅ 调度器已启动")
 
     def stop_scheduler(self):
         """停止调度器"""
@@ -144,7 +146,7 @@ class TradingTimeScheduler:
         schedule.clear()
         if self.thread:
             self.thread.join(timeout=5)
-        print("⏹️ 调度器已停止")
+        self.logger.info("⏹️ 调度器已停止")
 
     def _schedule_loop(self):
         """调度循环"""
@@ -161,46 +163,46 @@ class TradingTimeScheduler:
 
             # 设置开盘启动任务
             schedule.every().day.at(start_time).do(self._auto_start_monitoring)
-            print(f"📅 已设置开盘启动任务: {start_time}")
+            self.logger.info(f"📅 已设置开盘启动任务: {start_time}")
 
             # 设置收盘停止任务
             if self.config.get("auto_stop", True):
                 schedule.every().day.at(end_time).do(self._auto_stop_monitoring)
-                print(f"📅 已设置收盘停止任务: {end_time}")
+                self.logger.info(f"📅 已设置收盘停止任务: {end_time}")
 
         # 每分钟检查一次是否在交易时间
-        print("🔄 调度器循环已启动")
+        self.logger.info("🔄 调度器循环已启动")
         while self.running:
             try:
                 schedule.run_pending()
 
                 # 智能检测：如果当前在交易时间但服务未运行，则启动
                 if self.is_trading_time() and not self.monitor_service.running:
-                    print("🔔 检测到交易时间，自动启动监测服务")
+                    self.logger.info("🔔 检测到交易时间，自动启动监测服务")
                     self.monitor_service.start_monitoring()
 
                 # 智能检测：如果当前不在交易时间但服务在运行，且auto_stop=True，则停止
                 if not self.is_trading_time() and self.monitor_service.running and self.config.get("auto_stop", True):
-                    print("🔔 检测到非交易时间，自动停止监测服务")
+                    self.logger.info("🔔 检测到非交易时间，自动停止监测服务")
                     self.monitor_service.stop_monitoring()
 
                 time.sleep(60)  # 每分钟检查一次
             except Exception as e:
-                print(f"❌ 调度器错误: {e}")
+                self.logger.error(f"❌ 调度器错误: {e}", exc_info=True)
                 time.sleep(60)
 
     def _auto_start_monitoring(self):
         """自动启动监测"""
         if self.is_trading_day():
-            print(f"🔔 定时启动监测服务 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            self.logger.info(f"🔔 定时启动监测服务 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             if not self.monitor_service.running:
                 self.monitor_service.start_monitoring()
         else:
-            print("⏸️ 非交易日，跳过启动")
+            self.logger.info("⏸️ 非交易日，跳过启动")
 
     def _auto_stop_monitoring(self):
         """自动停止监测"""
-        print(f"🔔 定时停止监测服务 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        self.logger.info(f"🔔 定时停止监测服务 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         if self.monitor_service.running:
             self.monitor_service.stop_monitoring()
 

@@ -34,7 +34,9 @@ def render_config_page() -> None:
     if "temp_config" not in st.session_state:
         st.session_state.temp_config = {key: info["value"] for key, info in config_info.items()}
 
-    tab_basic, tab_data, tab_trade, tab_notify = st.tabs(["📝 基本配置", "📊 数据源配置", "🤖 量化交易配置", "📢 通知配置"])
+    tab_basic, tab_data, tab_trade, tab_notify = st.tabs(
+        ["📝 基本配置", "📊 数据源配置", "🤖 量化交易配置", "📢 通知配置"]
+    )
 
     with tab_basic:
         st.markdown("### DeepSeek API配置")
