@@ -12,7 +12,7 @@ from typing import Dict
 
 import streamlit as st
 
-from aiagents_stock.web.di_container import DIContainer
+from aiagents_stock.container import DIContainer
 from aiagents_stock.features.monitor.monitor_db import monitor_db
 from aiagents_stock.features.monitor.monitor_service import monitor_service
 from aiagents_stock.integrations.miniqmt_interface import get_miniqmt_status, miniqmt

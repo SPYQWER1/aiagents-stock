@@ -17,7 +17,7 @@ from aiagents_stock.domain.analysis.dto import (
     SentimentData,
 )
 from aiagents_stock.domain.analysis.ports import OptionalDataProvider
-from aiagents_stock.infrastructure.market_data_provider import is_chinese_stock
+from aiagents_stock.infrastructure.data_sources.data_source_manager import is_chinese_stock
 
 
 @dataclass(frozen=True)

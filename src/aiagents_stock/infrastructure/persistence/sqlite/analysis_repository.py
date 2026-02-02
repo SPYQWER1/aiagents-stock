@@ -2,7 +2,7 @@
 分析记录 SQLite 仓储适配器。
 
 该模块基于现有的 StockAnalysisDatabase 存储实现，
-对外提供领域端口 AnalysisRecordRepository 所需的最小能力。
+对外提供领域端口 StockAnalysisRepository 所需的最小能力。
 """
 
 from __future__ import annotations
@@ -11,61 +11,8 @@ from dataclasses import dataclass, asdict
 from typing import Any, Dict
 
 from aiagents_stock.db.database import StockAnalysisDatabase
-from aiagents_stock.domain.analysis.dto import AnalysisRecord
-from aiagents_stock.domain.analysis.ports import AnalysisRecordRepository, StockAnalysisRepository
+from aiagents_stock.domain.analysis.ports import StockAnalysisRepository
 from aiagents_stock.domain.analysis.model import StockAnalysis, StockInfo, AgentRole, AgentReview, AnalysisContent
-
-@dataclass(frozen=True)
-class SqliteAnalysisRecordRepository(AnalysisRecordRepository):
-    """
-    基于 sqlite 的分析记录仓储。
-
-    Args:
-        database: 现有的数据库实现（可在测试中传入临时库路径实例）
-    """
-
-    database: StockAnalysisDatabase
-
-    def save(self, *, record: AnalysisRecord) -> int:
-        """保存分析记录并返回记录 ID。"""
-
-        return int(
-            self.database.save_analysis(
-                symbol=record.symbol,
-                stock_name=record.stock_name,
-                period=record.period,
-                stock_info=record.stock_info,
-                agents_results=record.agents_results,
-                discussion_result=record.discussion_result,
-                final_decision=record.final_decision,
-            )
-        )
-
-    def get(self, *, record_id: int) -> AnalysisRecord | None:
-        """读取分析记录，若不存在返回 None。"""
-
-        raw = self.database.get_record_by_id(record_id)
-        if not raw:
-            return None
-
-        stock_info = raw.get("stock_info") or {}
-        symbol = str(stock_info.get("symbol") or raw.get("symbol") or "")
-        stock_name = str(raw.get("stock_name") or stock_info.get("name") or "")
-        period = str(raw.get("period") or "")
-
-        agents_results: dict[str, Any] = raw.get("agents_results") or {}
-        discussion_result: Any = raw.get("discussion_result")
-        final_decision: Any = raw.get("final_decision")
-
-        return AnalysisRecord(
-            symbol=symbol,
-            stock_name=stock_name,
-            period=period,
-            stock_info=stock_info,
-            agents_results=agents_results,
-            discussion_result=discussion_result,
-            final_decision=final_decision,
-        )
 
 @dataclass(frozen=True)
 class SqliteStockAnalysisRepository(StockAnalysisRepository):

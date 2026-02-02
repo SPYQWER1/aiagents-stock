@@ -7,8 +7,7 @@ DeepSeek 分析编排器实现。
 from __future__ import annotations
 
 import logging
-import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import re
@@ -21,7 +20,7 @@ from aiagents_stock.domain.analysis.model import (
 )
 from aiagents_stock.domain.analysis.services import AnalysisOrchestrator
 from aiagents_stock.domain.analysis.dto import StockDataBundle
-from aiagents_stock.domain.analysis.ports import LLMClient
+from aiagents_stock.domain.ai.ports import LLMClient
 from aiagents_stock.infrastructure.ai.prompts import (
     TECHNICAL_ANALYSIS_PROMPT,
     FUNDAMENTAL_ANALYSIS_PROMPT,
@@ -29,7 +28,8 @@ from aiagents_stock.infrastructure.ai.prompts import (
     RISK_MANAGEMENT_PROMPT,
     MARKET_SENTIMENT_PROMPT,
     NEWS_ANALYSIS_PROMPT,
-    TEAM_DISCUSSION_PROMPT
+    TEAM_DISCUSSION_PROMPT,
+    FINAL_DECISION_PROMPT,
 )
 
 # 导入用于格式化数据的 Fetcher (仅用于格式化，不进行网络请求)
@@ -387,49 +387,16 @@ class DeepSeekAnalysisOrchestrator(AnalysisOrchestrator):
         """生成最终投资决策"""
         indicators = bundle.indicators or {}
         
-        prompt = f"""
-基于前期的综合分析讨论，现在需要做出最终的投资决策。
-
-股票信息：
-- 股票代码：{analysis.stock_info.symbol}
-- 股票名称：{analysis.stock_info.name}
-- 当前价格：{analysis.stock_info.current_price}
-
-综合分析讨论结果：
-{discussion_text}
-
-当前关键技术位：
-- MA20：{indicators.get('ma20', 'N/A')}
-- 布林带上轨：{indicators.get('bb_upper', 'N/A')}
-- 布林带下轨：{indicators.get('bb_lower', 'N/A')}
-
-请给出最终投资决策，必须包含以下内容：
-
-1. 投资评级：买入/持有/卖出/观望/强烈买入/强烈卖出（必须为以上6个选项之一）
-2. 目标价位（具体数字）
-3. 操作建议（具体的买入/卖出策略）
-4. 进场位置（具体价位区间）
-5. 止盈位置（具体价位）
-6. 止损位置（具体价位）
-7. 持有周期建议
-8. 仓位建议（轻仓/中等仓位/重仓）
-9. 风险提示
-10. 信心度（1-10分）
-
-请以JSON格式输出决策结果，格式如下：
-{{
-    "rating": "买入",
-    "target_price": "目标价位数字",
-    "operation_advice": "具体操作建议",
-    "entry_range": "进场价位区间",
-    "take_profit": "止盈价位",
-    "stop_loss": "止损价位",
-    "holding_period": "持有周期",
-    "position_size": "仓位建议",
-    "risk_warning": "风险提示",
-    "confidence_level": "信心度(1-10分)"
-}}
-"""
+        prompt = FINAL_DECISION_PROMPT.format(
+            symbol=analysis.stock_info.symbol,
+            name=analysis.stock_info.name,
+            current_price=analysis.stock_info.current_price,
+            comprehensive_discussion=discussion_text,
+            ma20=indicators.get('ma20', 'N/A'),
+            bb_upper=indicators.get('bb_upper', 'N/A'),
+            bb_lower=indicators.get('bb_lower', 'N/A')
+        )
+        
         response = self._call_llm(
             "你是一名专业的投资决策专家，需要给出明确、可执行的投资建议。",
             prompt

@@ -1,7 +1,8 @@
 from __future__ import annotations
-from typing import Any
+from typing import Any, Iterator
 import streamlit as st
 
+from aiagents_stock.application.analysis.use_cases import BatchAnalyzeStocksRequest, BatchAnalysisItemResult
 from aiagents_stock.domain.analysis.dto import (
     FundFlowData,
     NewsData,
@@ -16,7 +17,7 @@ from aiagents_stock.web.config import (
     CACHE_TTL_STOCK_DATA_SECONDS,
     EnabledAnalysts,
 )
-from aiagents_stock.web.di_container import DIContainer
+from aiagents_stock.container import DIContainer
 
 
 def check_api_key() -> bool:
@@ -123,3 +124,27 @@ def analyze_single_stock_via_use_case(
         "discussion_result": response.analysis_result.discussion_result,
         "final_decision": response.analysis_result.final_decision,
     }
+
+
+def analyze_batch_stocks_via_use_case(
+    *,
+    stock_list: list[str],
+    period: str,
+    enabled: EnabledAnalysts,
+    selected_model: str,
+    max_workers: int = 1,
+    timeout_seconds: int | None = None
+) -> Iterator[BatchAnalysisItemResult]:
+    """
+    新架构入口：执行批量分析用例。
+    """
+    use_case = DIContainer.create_batch_analyze_stocks_use_case(model=selected_model)
+    request = BatchAnalyzeStocksRequest(
+        stock_list=stock_list,
+        period=period,
+        enabled_analysts=enabled.as_dict(),
+        selected_model=selected_model,
+        max_workers=max_workers,
+        timeout_seconds=timeout_seconds
+    )
+    yield from use_case.execute(request)

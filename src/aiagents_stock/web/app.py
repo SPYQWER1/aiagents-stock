@@ -80,9 +80,9 @@ def _render_current_view(*, view: "View", api_key_ok: bool, period: str, selecte
         return
 
     if view == View.MAIN_FORCE:
-        from aiagents_stock.features.main_force.main_force_ui import display_main_force_selector
+        from aiagents_stock.features.main_force.main_force_ui import display_main_force_stock_selection
 
-        display_main_force_selector()
+        display_main_force_stock_selection()
         return
 
     if view == View.LOW_PRICE_BULL:

@@ -1,18 +1,12 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-主力选股批量分析历史记录UI模块
-"""
-
+import json
 import pandas as pd
 import streamlit as st
+from aiagents_stock.container import DIContainer
+from aiagents_stock.web.navigation import View, set_current_view
 
-from aiagents_stock.features.main_force.main_force_batch_db import batch_db
-
-
-def display_batch_history():
-    """显示批量分析历史记录"""
-
+def display_selection_history():
+    """显示主力选股历史记录"""
+    
     # 返回按钮
     col_back, col_stats = st.columns([1, 4])
     with col_back:
@@ -20,179 +14,111 @@ def display_batch_history():
             st.session_state.main_force_view_history = False
             st.rerun()
 
-    st.markdown("## 📚 主力选股批量分析历史记录")
+    st.markdown("## 📚 选股历史记录中心")
     st.markdown("---")
+    
+    _display_selection_history()
 
-    # 获取统计信息
+def _display_selection_history():
+    """显示主力选股（筛选+分析）的历史记录"""
+    use_case = DIContainer.create_get_main_force_history_use_case()
+    
     try:
-        stats = batch_db.get_statistics()
-
-        # 显示统计指标
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            st.metric("总记录数", f"{stats['total_records']} 条")
-        with col2:
-            st.metric("分析股票总数", f"{stats['total_stocks_analyzed']} 只")
-        with col3:
-            st.metric("成功分析", f"{stats['total_success']} 只")
-        with col4:
-            st.metric("成功率", f"{stats['success_rate']}%")
-        with col5:
-            st.metric("平均耗时", f"{stats['average_time']:.1f}秒")
-
-        st.markdown("---")
-
-    except Exception as e:
-        st.warning(f"⚠️ 无法获取统计信息: {str(e)}")
-
-    # 获取历史记录
-    try:
-        history_records = batch_db.get_all_history(limit=50)
-
+        history_records = use_case.execute(limit=50)
+        
         if not history_records:
-            st.info("📝 暂无批量分析历史记录")
-            return
+             st.info("📝 暂无选股历史记录")
+             return
 
-        st.markdown(f"### 📋 最近 {len(history_records)} 条记录")
-
-        # 显示每条记录
+        st.markdown(f"### 📋 最近 {len(history_records)} 条选股记录")
+        
         for idx, record in enumerate(history_records):
+            # Parse recommendations length
+            try:
+                recs = json.loads(record["recommendations"]) if isinstance(record["recommendations"], str) else record["recommendations"]
+                rec_count = len(recs)
+            except:
+                recs = []
+                rec_count = 0
+                
             with st.expander(
                 f"🔍 {record['analysis_date']} | "
-                f"共{record['batch_count']}只 | "
-                f"成功{record['success_count']}只 | "
-                f"{record['analysis_mode']} | "
-                f"耗时{record['total_time']/60:.1f}分钟",
-                expanded=(idx == 0),  # 第一条默认展开
+                f"获取{record['raw_stocks_count']}只 | "
+                f"筛选{record['filtered_stocks_count']}只 | "
+                f"推荐{rec_count}只 | "
+                f"耗时{record['total_time']:.1f}秒",
+                expanded=(idx == 0)
             ):
-                # 记录基本信息
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.write(f"**分析时间**: {record['analysis_date']}")
-                with col2:
-                    st.write(f"**分析模式**: {record['analysis_mode']}")
-                with col3:
-                    st.write(f"**总数**: {record['batch_count']} 只")
-                with col4:
-                    st.write(f"**耗时**: {record['total_time']/60:.1f} 分钟")
-
-                col5, col6, col7, col8 = st.columns(4)
-                with col5:
-                    st.metric("✅ 成功", record["success_count"])
-                with col6:
-                    st.metric("❌ 失败", record["failed_count"])
-                with col7:
-                    success_rate = (
-                        (record["success_count"] / record["batch_count"] * 100) if record["batch_count"] > 0 else 0
-                    )
-                    st.metric("成功率", f"{success_rate:.1f}%")
-                with col8:
-                    avg_time = record["total_time"] / record["batch_count"] if record["batch_count"] > 0 else 0
-                    st.metric("平均耗时", f"{avg_time:.1f}秒")
-
-                st.markdown("---")
-
-                # 成功的股票
-                results = record.get("results", [])
-                success_results = [r for r in results if r.get("success", False)]
-                failed_results = [r for r in results if not r.get("success", False)]
-
-                if success_results:
-                    st.markdown(f"#### ✅ 成功分析的股票 ({len(success_results)} 只)")
-
-                    # 构建结果表格
-                    table_data = []
-                    for r in success_results:
-                        stock_info = r.get("stock_info", {})
-                        final_decision = r.get("final_decision", {})
-
-                        table_data.append(
-                            {
-                                "代码": r.get("symbol", "N/A"),
-                                "名称": stock_info.get("name", stock_info.get("股票名称", "N/A")),
-                                "评级": final_decision.get("rating", final_decision.get("investment_rating", "N/A")),
-                                "信心度": final_decision.get("confidence_level", "N/A"),
-                                "进场区间": final_decision.get("entry_range", "N/A"),
-                                "止盈位": final_decision.get("take_profit", "N/A"),
-                                "止损位": final_decision.get("stop_loss", "N/A"),
-                            }
-                        )
-
-                    df = pd.DataFrame(table_data)
-
-                    # 类型统一，避免Arrow序列化错误
-                    numeric_cols = ["信心度", "止盈位", "止损位"]
-                    for col in numeric_cols:
-                        if col in df.columns:
-                            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-                    text_cols = ["代码", "名称", "评级", "进场区间"]
-                    for col in text_cols:
-                        if col in df.columns:
-                            df[col] = df[col].astype(str)
-
-                    st.dataframe(df, width="content")
-
-                    # 显示详细分析（可展开）
-                    with st.expander("📊 查看详细分析报告"):
-                        for r in success_results:
-                            stock_info = r.get("stock_info", {})
-                            final_decision = r.get("final_decision", {})
-
-                            st.markdown(
-                                f"### {r.get('symbol', 'N/A')} - {stock_info.get('name', stock_info.get('股票名称', 'N/A'))}"
-                            )
-
-                            # 投资建议
-                            st.markdown("#### 💡 投资建议")
-                            st.write(
-                                final_decision.get("operation_advice", final_decision.get("investment_advice", "无"))
-                            )
-
-                            # 风险提示
-                            st.markdown("#### ⚠️ 风险提示")
-                            st.write(final_decision.get("risk_warning", "无"))
-
-                            st.markdown("---")
-
-                # 失败的股票
-                if failed_results:
-                    st.markdown(f"#### ❌ 分析失败的股票 ({len(failed_results)} 只)")
-
-                    fail_data = []
-                    for r in failed_results:
-                        fail_data.append({"代码": r.get("symbol", "N/A"), "错误原因": r.get("error", "未知错误")})
-
-                    df_fail = pd.DataFrame(fail_data)
-                    st.dataframe(df_fail, width="content")
-
-                # 操作按钮
-                col_del, col_reload = st.columns([1, 1])
-                with col_del:
-                    if st.button("🗑️ 删除此记录", key=f"del_{record['id']}"):
-                        if batch_db.delete_record(record["id"]):
-                            st.success("✅ 删除成功")
-                            st.rerun()
+                 col1, col2, col3, col4 = st.columns(4)
+                 with col1:
+                     st.write(f"**分析时间**: {record['analysis_date']}")
+                 with col2:
+                     st.write(f"**获取股票**: {record['raw_stocks_count']}")
+                 with col3:
+                     st.write(f"**筛选通过**: {record['filtered_stocks_count']}")
+                 with col4:
+                     st.write(f"**最终推荐**: {rec_count}")
+                     
+                 # 推荐详情预览
+                 if rec_count > 0:
+                     st.markdown("#### 🏆 推荐列表")
+                     rec_data = []
+                     for r in recs:
+                        # Handle both dict and object (if deserialized differently)
+                        r_dict = r if isinstance(r, dict) else r.__dict__
+                        reasons = r_dict.get("reasons", [])
+                        
+                        if isinstance(reasons, str):
+                            first_reason = reasons
+                        elif isinstance(reasons, list) and reasons:
+                            first_reason = reasons[0]
                         else:
-                            st.error("❌ 删除失败")
+                            first_reason = "N/A"
 
-                with col_reload:
-                    if st.button("🔄 加载到当前结果", key=f"reload_{record['id']}"):
-                        # 将历史记录加载到session_state
-                        st.session_state.main_force_batch_results = {
-                            "results": record["results"],
-                            "total": record["batch_count"],
-                            "success": record["success_count"],
-                            "failed": record["failed_count"],
-                            "elapsed_time": record["total_time"],
-                            "analysis_mode": record["analysis_mode"],
-                        }
-                        st.session_state.main_force_view_history = False
-                        st.success("✅ 已加载到当前结果，返回主页查看")
-                        st.rerun()
+                        rec_data.append({
+                            "代码": r_dict.get("symbol", ""),
+                            "名称": r_dict.get("name", ""),
+                            "理由": str(first_reason)[:30] + "..."
+                        })
+                     st.dataframe(pd.DataFrame(rec_data), hide_index=True, width='stretch')
+                 
+                 # 操作按钮
+                 col_del, col_load, col_home = st.columns([1, 1, 1.5])
+                 
+                 with col_del:
+                     if st.button("🗑️ 删除此记录", key=f"del_sel_{record['id']}"):
+                         if use_case.delete(record['id']):
+                             st.success("✅ 删除成功")
+                             st.rerun()
+                         else:
+                             st.error("❌ 删除失败")
+                             
+                 with col_load:
+                     if st.button("🔄 加载查看详情", key=f"load_sel_{record['id']}"):
+                         analysis = use_case.get_by_id(record['id'])
+                         if analysis:
+                             st.session_state.main_force_result = analysis
+                             st.session_state.main_force_view_history = False
+                             st.rerun()
+                         else:
+                             st.error("❌ 加载失败，记录可能不存在")
+
+                 with col_home:
+                     if st.button("🚀 发送到主页分析", key=f"home_sel_{record['id']}", help="将推荐股票发送到主页进行批量分析"):
+                         symbols = []
+                         for r in recs:
+                             r_dict = r if isinstance(r, dict) else r.__dict__
+                             if "symbol" in r_dict:
+                                 symbols.append(r_dict["symbol"])
+                         
+                         if symbols:
+                             # 清理后缀
+                             cleaned_symbols = [s.split(".")[0] if "." in s else s for s in symbols]
+                             st.session_state.batch_analysis_input_stocks = ", ".join(cleaned_symbols)
+                             set_current_view(View.HOME)
+                             st.rerun()
+                         else:
+                             st.warning("⚠️ 没有推荐股票可发送")
 
     except Exception as e:
-        st.error(f"❌ 获取历史记录失败: {str(e)}")
-        import traceback
-
-        st.code(traceback.format_exc())
+        st.error(f"❌ 获取选股历史记录失败: {str(e)}")

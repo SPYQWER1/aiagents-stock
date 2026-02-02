@@ -6,17 +6,18 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterator
 
 from aiagents_stock.domain.analysis.dto import  AnalysisResult, StockDataBundle, StockRequest
 from aiagents_stock.domain.analysis.model import StockAnalysis, StockInfo, AgentRole
 from aiagents_stock.domain.analysis.ports import (
     AIAnalyzer,
-    AnalysisRecordRepository,
     MarketDataProvider,
     OptionalDataProvider,
     StockAnalysisRepository,
+    StockBatchAnalysisRepository,
 )
 from aiagents_stock.domain.analysis.services import AnalysisOrchestrator
 
@@ -56,7 +57,6 @@ class AnalyzeSingleStockUseCase:
         repository: StockAnalysisRepository,
         # 兼容旧代码，暂时保留可选参数，但在新逻辑中不再使用
         analyzer: AIAnalyzer | None = None,
-        old_repository: AnalysisRecordRepository | None = None,
     ) -> None:
         self._data_provider = data_provider
         self._optional_data_provider = optional_data_provider
@@ -195,3 +195,126 @@ class AnalyzeSingleStockUseCase:
             bundle=full_bundle,
             analysis_result=analysis_result,
         )
+
+
+@dataclass
+class BatchAnalyzeStocksRequest:
+    stock_list: list[str]
+    period: str
+    selected_model: str
+    enabled_analysts: dict[str, bool]
+    max_workers: int = 1
+    timeout_seconds: int | None = None
+
+
+@dataclass
+class BatchAnalysisItemResult:
+    symbol: str
+    success: bool
+    data: AnalyzeSingleStockResponse | None = None
+    error: str | None = None
+
+
+class BatchAnalyzeStocksUseCase:
+    """
+    批量分析用例。
+    负责编排批量分析任务，支持顺序或并行执行。
+    """
+
+    def __init__(self, single_stock_use_case: AnalyzeSingleStockUseCase) -> None:
+        self._single_stock_use_case = single_stock_use_case
+
+    def execute(self, request: BatchAnalyzeStocksRequest) -> Iterator[BatchAnalysisItemResult]:
+        """
+        执行批量分析。
+        
+        Yields:
+            BatchAnalysisItemResult: 单个股票的分析结果
+        """
+        if request.max_workers > 1:
+            yield from self._execute_parallel(request)
+        else:
+            yield from self._execute_sequential(request)
+
+    def _analyze_one(self, symbol: str, request: BatchAnalyzeStocksRequest) -> BatchAnalysisItemResult:
+        try:
+            stock_request = StockRequest(
+                symbol=symbol,
+                period=request.period,
+                model=request.selected_model,
+                enabled_analysts=request.enabled_analysts,
+            )
+            # 批量模式下通常不使用预加载数据
+            response = self._single_stock_use_case.execute(request=stock_request)
+            return BatchAnalysisItemResult(symbol=symbol, success=True, data=response)
+        except Exception as e:
+            return BatchAnalysisItemResult(symbol=symbol, success=False, error=str(e))
+
+    def _execute_sequential(self, request: BatchAnalyzeStocksRequest) -> Iterator[BatchAnalysisItemResult]:
+        for symbol in request.stock_list:
+            yield self._analyze_one(symbol, request)
+
+    def _execute_parallel(self, request: BatchAnalyzeStocksRequest) -> Iterator[BatchAnalysisItemResult]:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=request.max_workers) as executor:
+            future_to_symbol = {
+                executor.submit(self._analyze_one, symbol, request): symbol
+                for symbol in request.stock_list
+            }
+            for future in concurrent.futures.as_completed(future_to_symbol):
+                symbol = future_to_symbol[future]
+                try:
+                    result = future.result(timeout=request.timeout_seconds)
+                    yield result
+                except concurrent.futures.TimeoutError:
+                    yield BatchAnalysisItemResult(
+                        symbol=symbol, 
+                        success=False, 
+                        error=f"分析超时（{request.timeout_seconds}秒）"
+                    )
+                except Exception as exc:
+                    yield BatchAnalysisItemResult(
+                        symbol=symbol, 
+                        success=False, 
+                        error=f"System Error: {str(exc)}"
+                    )
+
+
+class SaveBatchAnalysisResultUseCase:
+    """保存批量分析结果用例"""
+    
+    def __init__(self, repository: StockBatchAnalysisRepository):
+        self.repository = repository
+
+    def execute(
+        self, 
+        batch_count: int, 
+        analysis_mode: str, 
+        success_count: int, 
+        failed_count: int, 
+        total_time: float, 
+        results: list[dict[str, Any]]
+    ) -> int:
+        return self.repository.save(
+            batch_count, 
+            analysis_mode, 
+            success_count, 
+            failed_count, 
+            total_time, 
+            results
+        )
+
+
+class GetBatchAnalysisHistoryUseCase:
+    """获取批量分析历史用例"""
+    
+    def __init__(self, repository: StockBatchAnalysisRepository):
+        self.repository = repository
+
+    def execute(self, limit: int = 50) -> list[dict[str, Any]]:
+        return self.repository.get_all(limit)
+    
+    def get_by_id(self, record_id: int) -> dict[str, Any] | None:
+        return self.repository.get_by_id(record_id)
+        
+    def delete(self, record_id: int) -> bool:
+        return self.repository.delete(record_id)

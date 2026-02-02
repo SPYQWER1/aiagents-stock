@@ -39,7 +39,6 @@ from aiagents_stock.domain.analysis.ports import (
 )
 from aiagents_stock.domain.analysis.services import AnalysisOrchestrator
 from aiagents_stock.infrastructure.persistence.sqlite.analysis_repository import (
-    SqliteAnalysisRecordRepository,
     SqliteStockAnalysisRepository
 )
 
@@ -108,8 +107,6 @@ def test_single_stock_analysis_use_case_persists_and_reads_back(tmp_path):
     database = StockAnalysisDatabase(db_path=str(db_path))
     # Use real repository to test persistence logic too
     repository = SqliteStockAnalysisRepository(database=database)
-    # Old repository for verification (optional)
-    old_repo = SqliteAnalysisRecordRepository(database=database)
 
     # Setup Data
     stock_info = {"symbol": "000001", "name": "平安银行", "current_price": 10.0}
@@ -153,20 +150,12 @@ def test_single_stock_analysis_use_case_persists_and_reads_back(tmp_path):
     assert "technical" in response.analysis_result.agents_results
     assert response.analysis_result.agents_results["technical"]["analysis"] == "Mock output for technical"
 
-    # Verify Persistence (using old repo to read back as verification of DB schema compatibility)
-    saved = old_repo.get(record_id=response.record_id)
-    assert saved is not None
-    assert saved.symbol == "000001"
-    assert saved.stock_name == "平安银行"
-    assert saved.period == "1y"
-    assert saved.final_decision["rating"] == "中性"
-    
     # Verify Persistence (using new repo)
-    # Note: New repo find_by_id expects string ID, but we have int ID from save
-    # In real usage, we might cast. Here we just verify it exists.
-    # saved_agg = repository.find_by_id(str(response.record_id))
-    # assert saved_agg is not None
-    # assert saved_agg.stock_info.symbol == "000001"
+    saved_agg = repository.find_by_id(str(response.record_id))
+    assert saved_agg is not None
+    assert saved_agg.stock_info.symbol == "000001"
+    assert saved_agg.period == "1y"
+    assert saved_agg.final_decision["rating"] == "中性"
 
 
 def test_single_stock_analysis_use_case_handles_optional_data(tmp_path):

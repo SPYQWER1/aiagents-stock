@@ -12,7 +12,7 @@ from aiagents_stock.web.components.analysis_display import (
     display_stock_info,
     display_team_discussion,
 )
-from aiagents_stock.web.services.analysis_service import get_stock_data
+from aiagents_stock.web.adapters.analysis_adapter import get_stock_data
 
 
 def display_batch_analysis_results(results: list[dict[str, Any]], period: str) -> None:
@@ -109,6 +109,14 @@ def display_comparison_table(results: list[dict[str, Any]]) -> None:
         )
 
     df = pd.DataFrame(comparison_data)
+
+    # 数据清洗：将数值列中的 'N/A' 等非数值字符转换为 NaN，避免 Arrow 序列化错误
+    for col in df.columns:
+        # 检查列名是否包含通常为数值的关键词
+        if any(key in col for key in ["市盈率", "市净率", "涨跌幅", "RSI", "MACD", "价格", "信心度"]):
+            # 尝试转换为数值类型，无法转换的变为 NaN
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
     st.dataframe(df, width="stretch", height=400)
     st.caption("💡 投资评级说明：强烈买入 > 买入 > 持有 > 卖出 > 强烈卖出")
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from aiagents_stock.domain.analysis.dto import (
-    AnalysisRecord,
     AnalysisResult,
     FundFlowData,
     NewsData,
@@ -18,6 +17,7 @@ from aiagents_stock.domain.analysis.dto import (
     RiskData,
     SentimentData,
     StockDataBundle,
+    StockRequest,
 )
 
 
@@ -70,21 +70,7 @@ class AIAnalyzer(Protocol):
         request: StockRequest,
         bundle: StockDataBundle,
     ) -> AnalysisResult:
-        """执行 AI 分析。"""
-
-
-class AnalysisRecordRepository(Protocol):
-    """
-    分析记录持久化端口。
-
-    该端口用于隔离存储实现（sqlite/其他DB），并提升用例可测试性。
-    """
-
-    def save(self, *, record: AnalysisRecord) -> int:
-        """保存分析记录并返回记录 ID。"""
-
-    def get(self, *, record_id: int) -> AnalysisRecord | None:
-        """读取分析记录，若不存在返回 None。"""
+        """执行分析。"""
 
 
 from aiagents_stock.domain.analysis.model import StockAnalysis
@@ -99,15 +85,29 @@ class StockAnalysisRepository(Protocol):
 
     def find_by_id(self, analysis_id: str) -> StockAnalysis | None:
         """根据 ID 查找分析聚合根。"""
-        """根据 ID 查找分析聚合根。"""
 
 
-class LLMClient(Protocol):
+class StockBatchAnalysisRepository(Protocol):
     """
-    LLM 客户端接口。
-    只负责发送消息和接收响应，不包含任何业务 Prompt。
+    批量分析历史记录仓储接口。
     """
-    
-    def call_chat(self, messages: list[dict[str, str]], **kwargs) -> str:
-        """调用聊天补全接口。"""
-        ...
+
+    def save(
+        self,
+        batch_count: int,
+        analysis_mode: str,
+        success_count: int,
+        failed_count: int,
+        total_time: float,
+        results: list[dict[str, Any]],
+    ) -> int:
+        """保存批量分析结果。"""
+
+    def get_all(self, limit: int = 50) -> list[dict[str, Any]]:
+        """获取所有历史记录。"""
+
+    def get_by_id(self, record_id: int) -> dict[str, Any] | None:
+        """根据ID获取单条记录。"""
+
+    def delete(self, record_id: int) -> bool:
+        """删除记录。"""

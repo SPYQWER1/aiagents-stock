@@ -9,7 +9,7 @@ from aiagents_stock.db.database import db
 from aiagents_stock.features.monitor.monitor_service import monitor_service
 from aiagents_stock.web.config import DEFAULT_PERIOD, PERIOD_OPTIONS
 from aiagents_stock.web.navigation import View, get_current_view, set_current_view
-from aiagents_stock.web.services.analysis_service import check_api_key
+from aiagents_stock.web.adapters.analysis_adapter import check_api_key
 
 
 @dataclass(frozen=True)

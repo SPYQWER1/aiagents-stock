@@ -481,7 +481,11 @@ class MarketSentimentDataFetcher:
                         logger.info(f"   [Tushare] ✅ 成功获取大盘指数涨跌幅: {change_pct}%")
                         return {"index_name": "上证指数", "change_percent": change_pct}
                 except Exception as te:
-                    logger.error(f"   [Tushare] ❌ 获取失败: {te}", exc_info=True)
+                    error_msg = str(te)
+                    if "权限" in error_msg:
+                         logger.warning(f"   [Tushare] ❌ 获取失败: 接口权限不足 (请检查 Tushare 积分: https://tushare.pro/document/1?doc_id=108)")
+                    else:
+                        logger.error(f"   [Tushare] ❌ 获取失败: {te}", exc_info=True)
 
         return None
 

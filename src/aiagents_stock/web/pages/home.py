@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-import concurrent.futures
+import json
+import time
+import pandas as pd
 from typing import Any
 
 import streamlit as st
 
+from aiagents_stock.container import DIContainer
+from aiagents_stock.application.analysis.use_cases import BatchAnalysisItemResult
 from aiagents_stock.web.components.analysis_display import (
     display_agents_analysis,
     display_final_decision,
@@ -18,7 +22,8 @@ from aiagents_stock.web.config import (
     MAX_BATCH_STOCKS_RECOMMENDED,
     EnabledAnalysts,
 )
-from aiagents_stock.web.services.analysis_service import (
+from aiagents_stock.web.adapters.analysis_adapter import (
+    analyze_batch_stocks_via_use_case,
     analyze_single_stock_via_use_case,
     get_financial_data,
     get_stock_data,
@@ -45,11 +50,18 @@ def _render_mode_and_inputs() -> tuple[str, str, bool, str]:
     """渲染模式选择与输入区，返回（模式、输入、按钮点击、批量模式）。"""
 
     col_mode1, col_mode2 = st.columns([1, 3])
+    
+    # 自动切换到批量模式
+    idx = 0
+    if st.session_state.get("batch_analysis_input_stocks"):
+        idx = 1
+        
     with col_mode1:
         analysis_mode = st.radio(
             "分析模式",
             ["单个分析", "批量分析"],
             horizontal=True,
+            index=idx
         )
 
     batch_mode = st.session_state.get("batch_mode", "顺序分析")
@@ -72,6 +84,7 @@ def _render_mode_and_inputs() -> tuple[str, str, bool, str]:
                 "🔍 请输入股票代码",
                 placeholder="例如: AAPL, 000001, 00700",
                 help="支持A股(如000001)、港股(如00700)和美股(如AAPL)",
+                key="home_single_stock_input"
             )
         with col2:
             analyze_button = st.button("🚀 开始分析", type="primary", width="stretch")
@@ -81,14 +94,25 @@ def _render_mode_and_inputs() -> tuple[str, str, bool, str]:
                 st.success("缓存已清除")
     else:
         ## 批量分析输入区
+        # 检查是否有从外部传入的预设值
+        default_value = ""
+        if "batch_analysis_input_stocks" in st.session_state:
+            default_value = st.session_state.batch_analysis_input_stocks
+            # 消费后清除，避免一直覆盖
+            del st.session_state.batch_analysis_input_stocks
+        
+        # 如果没有预设值，但有 session_state key 对应的值，streamlit 会自动使用
+        
         stock_input = st.text_area(
             "🔍 请输入多个股票代码（每行一个或用逗号分隔）",
+            value=default_value if default_value else st.session_state.get("home_batch_stock_input", ""),
             placeholder="例如:\n000001\n600036\n00700\n\n或者: 000001, 600036, 00700, AAPL",
             height=120,
             help="支持多种格式：每行一个代码或用逗号分隔。支持A股、港股、美股",
+            key="home_batch_stock_input"
         )
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             analyze_button = st.button("🚀 开始批量分析", type="primary", width="stretch")
         with col2:
@@ -99,6 +123,10 @@ def _render_mode_and_inputs() -> tuple[str, str, bool, str]:
             if st.button("🗑️ 清除结果", width="stretch"):
                 reset_batch_analysis_state()
                 st.success("已清除批量分析结果")
+        with col4:
+            if st.button("📜 历史记录", width="stretch"):
+                st.session_state.view_home_history = True
+                st.rerun()
 
     return analysis_mode, stock_input, analyze_button, batch_mode
 
@@ -240,35 +268,6 @@ def _run_single_analysis_use_case_ui(symbol: str, period: str, enabled: EnabledA
         status_text.empty()
 
 
-def _analyze_single_stock_for_batch(symbol: str, period: str, enabled: EnabledAnalysts, selected_model: str, *, use_cache: bool) -> dict[str, Any]:
-    """执行单只股票分析（批量模式使用），统一使用新架构用例。"""
-
-    try:
-        # 统一使用用例路径
-        result = analyze_single_stock_via_use_case(
-            symbol=symbol,
-            period=period,
-            enabled=enabled,
-            selected_model=selected_model,
-            use_cached_agents=use_cache,
-        )
-
-        return {
-            "symbol": symbol,
-            "success": True,
-            "stock_info": result["stock_info"],
-            "indicators": result["indicators"],
-            "agents_results": result["agents_results"],
-            "discussion_result": result["discussion_result"],
-            "final_decision": result["final_decision"],
-            "saved_to_db": True,  # 用例内部已处理保存
-            "db_error": None,
-            "record_id": result["record_id"],
-        }
-    except Exception as exc:
-        return {"symbol": symbol, "error": str(exc), "success": False}
-
-
 def _run_batch_analysis_ui(stock_list: list[str], period: str, enabled: EnabledAnalysts, selected_model: str, batch_mode: str) -> None:
     """执行并渲染批量分析流程（顺序 / 多线程）。"""
 
@@ -278,52 +277,83 @@ def _run_batch_analysis_ui(stock_list: list[str], period: str, enabled: EnabledA
 
     results: list[dict[str, Any]] = []
     total = len(stock_list)
+    max_workers = BATCH_MAX_WORKERS if batch_mode == "多线程并行" else 1
 
-    if batch_mode == "多线程并行":
-        status_text.text(f"🚀 使用多线程并行分析 {total} 只股票...")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=BATCH_MAX_WORKERS) as executor:
-            future_to_symbol = {
-                executor.submit(
-                    _analyze_single_stock_for_batch,
-                    symbol,
-                    period,
-                    enabled,
-                    selected_model,
-                    use_cache=False,
-                ): symbol
-                for symbol in stock_list
-            }
-            for future in concurrent.futures.as_completed(future_to_symbol):
-                symbol = future_to_symbol[future]
-                try:
-                    result = future.result(timeout=BATCH_TIMEOUT_SECONDS)
-                except concurrent.futures.TimeoutError:
-                    result = {"symbol": symbol, "error": f"分析超时（{BATCH_TIMEOUT_SECONDS}秒）", "success": False}
-                except Exception as exc:
-                    result = {"symbol": symbol, "error": str(exc), "success": False}
+    status_text.text(f"🚀 正在分析 {total} 只股票...")
+    
+    start_time = time.time()
+    
+    # 调用批量分析用例
+    for i, item_result in enumerate(analyze_batch_stocks_via_use_case(
+        stock_list=stock_list,
+        period=period,
+        enabled=enabled,
+        selected_model=selected_model,
+        max_workers=max_workers,
+        timeout_seconds=BATCH_TIMEOUT_SECONDS
+    ), 1):
+        symbol = item_result.symbol
+        
+        # 转换结果为字典格式
+        result_dict = {
+            "symbol": symbol,
+            "success": item_result.success,
+            "error": item_result.error,
+        }
+        
+        if item_result.success and item_result.data:
+            data = item_result.data
+            result_dict.update({
+                "stock_info": data.bundle.stock_info,
+                "indicators": data.bundle.indicators,
+                "agents_results": data.analysis_result.agents_results,
+                "discussion_result": data.analysis_result.discussion_result,
+                "final_decision": data.analysis_result.final_decision,
+                "saved_to_db": True,
+                "record_id": data.record_id,
+            })
 
-                results.append(result)
-                progress_bar.progress(len(results) / total)
-                if result.get("success"):
-                    status_text.text(f"✅ [{len(results)}/{total}] {symbol} 分析完成")
-                else:
-                    status_text.text(f"❌ [{len(results)}/{total}] {symbol} 分析失败: {result.get('error', '未知错误')}")
-    else:
-        status_text.text(f"📝 按顺序分析 {total} 只股票...")
-        for i, symbol in enumerate(stock_list, 1):
-            status_text.text(f"🔍 [{i}/{total}] 正在分析 {symbol}...")
-            result = _analyze_single_stock_for_batch(symbol, period, enabled, selected_model, use_cache=True)
-            results.append(result)
-            progress_bar.progress(i / total)
-            if result.get("success"):
-                status_text.text(f"✅ [{i}/{total}] {symbol} 分析完成")
-            else:
-                status_text.text(f"❌ [{i}/{total}] {symbol} 分析失败: {result.get('error', '未知错误')}")
+        results.append(result_dict)
+        
+        # 更新进度
+        progress_bar.progress(i / total)
+        if item_result.success:
+            status_text.text(f"✅ [{i}/{total}] {symbol} 分析完成")
+        else:
+            status_text.text(f"❌ [{i}/{total}] {symbol} 分析失败: {item_result.error}")
 
     progress_bar.progress(1.0)
     success_count = sum(1 for r in results if r.get("success"))
     failed_count = total - success_count
     saved_count = sum(1 for r in results if r.get("saved_to_db"))
+    
+    total_time = time.time() - start_time
+
+    # 保存批量分析会话记录
+    try:
+        save_use_case = DIContainer.create_save_batch_analysis_result_use_case()
+        # 构造精简的 results 用于存储 (去掉 stock_info 等大对象)
+        simple_results = []
+        for r in results:
+            simple_r = {
+                "symbol": r.get("symbol"),
+                "success": r.get("success"),
+                "error": r.get("error"),
+                "final_decision": r.get("final_decision", "N/A"),
+                "record_id": r.get("record_id")
+            }
+            simple_results.append(simple_r)
+            
+        save_use_case.execute(
+            batch_count=total,
+            analysis_mode=batch_mode,
+            success_count=success_count,
+            failed_count=failed_count,
+            total_time=total_time,
+            results=simple_results
+        )
+    except Exception as e:
+        st.error(f"⚠️ 保存批量分析历史记录失败: {e}")
 
     if success_count > 0:
         status_text.success(f"✅ 批量分析完成！成功 {success_count} 只，失败 {failed_count} 只，已保存 {saved_count} 只到历史记录")
@@ -341,10 +371,116 @@ def _run_batch_analysis_ui(stock_list: list[str], period: str, enabled: EnabledA
     st.rerun()
 
 
+def _display_batch_history():
+    """显示批量分析历史记录"""
+    
+    col_back, col_title = st.columns([1, 4])
+    with col_back:
+        if st.button("← 返回分析"):
+            st.session_state.view_home_history = False
+            st.rerun()
+            
+    st.markdown("## 📚 批量分析历史记录")
+    st.markdown("---")
+    
+    use_case = DIContainer.create_get_batch_analysis_history_use_case()
+    
+    try:
+        history_records = use_case.execute(limit=50)
+        
+        if not history_records:
+             st.info("📝 暂无批量分析历史记录")
+             return
+
+        st.markdown(f"### 📋 最近 {len(history_records)} 条记录")
+        
+        for idx, record in enumerate(history_records):
+            results_data = []
+            try:
+                if isinstance(record["results"], str):
+                    results_data = json.loads(record["results"])
+                else:
+                    results_data = record["results"]
+            except:
+                results_data = []
+            
+            success_rate = (record['success_count'] / record['batch_count'] * 100) if record['batch_count'] > 0 else 0
+            
+            with st.expander(
+                f"⚡ {record['created_at']} | "
+                f"共{record['batch_count']}只 | "
+                f"成功{record['success_count']} | "
+                f"成功率{success_rate:.0f}% | "
+                f"耗时{record['total_time']:.1f}秒",
+                expanded=(idx == 0)
+            ):
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.write(f"**分析时间**: {record['created_at']}")
+                with col2:
+                    st.write(f"**模式**: {record['analysis_mode']}")
+                with col3:
+                    st.write(f"**成功/失败**: {record['success_count']} / {record['failed_count']}")
+                with col4:
+                    st.write(f"**总耗时**: {record['total_time']:.1f}秒")
+                
+                # 结果预览
+                if results_data:
+                    st.markdown("#### 📊 分析结果概览")
+                    
+                    df_data = []
+                    for res in results_data:
+                        decision = res.get("final_decision", "N/A")
+                        # 如果是 dict (可能来自旧数据或不同结构), 尝试提取
+                        if isinstance(decision, dict):
+                             decision = str(decision)
+                             
+                        df_data.append({
+                            "股票代码": res.get("symbol", ""),
+                            "状态": "✅ 成功" if res.get("success") else "❌ 失败",
+                            "决策": decision,
+                            "错误信息": res.get("error", "")
+                        })
+                    
+                    st.dataframe(pd.DataFrame(df_data), hide_index=True, width='stretch')
+
+                # 操作按钮
+                col_del, col_load = st.columns([1, 1])
+                with col_del:
+                    if st.button("🗑️ 删除此记录", key=f"del_home_batch_{record['id']}"):
+                        if use_case.delete(record['id']):
+                            st.success("✅ 删除成功")
+                            st.rerun()
+                        else:
+                            st.error("❌ 删除失败")
+                with col_load:
+                    if st.button("🔄 加载到输入框", key=f"load_home_batch_{record['id']}"):
+                        symbols = []
+                        if results_data:
+                            for r in results_data:
+                                if "symbol" in r:
+                                    symbols.append(r["symbol"])
+                        
+                        if symbols:
+                            st.session_state.batch_analysis_input_stocks = ", ".join(symbols)
+                            st.session_state.view_home_history = False
+                            st.success(f"✅ 已加载 {len(symbols)} 只股票到输入框")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ 记录中没有有效的股票代码")
+
+    except Exception as e:
+        st.error(f"❌ 获取历史记录失败: {str(e)}")
+
+
 def render_home(*, api_key_ok: bool, period: str, selected_model: str) -> None:
     """渲染首页（单股/批量分析）。"""
 
     render_header()
+
+    if st.session_state.get("view_home_history"):
+        _display_batch_history()
+        return
 
     analysis_mode, stock_input, analyze_button, batch_mode = _render_mode_and_inputs()
     enabled = _render_analyst_selector()

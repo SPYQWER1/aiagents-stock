@@ -1,19 +1,18 @@
 import base64
 import re
 from datetime import datetime
-
 import pandas as pd
 import streamlit as st
+from aiagents_stock.domain.main_force.model import MainForceAnalysis
 
-
-def generate_main_force_markdown_report(analyzer, result):
+def generate_main_force_markdown_report(analysis: MainForceAnalysis):
     """生成主力选股Markdown格式的分析报告"""
 
     # 获取当前时间
     current_time = datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
 
     # 获取分析参数
-    params = result.get("params", {})
+    params = analysis.params
     start_date = params.get("start_date", "N/A")
     min_cap = params.get("min_market_cap", 50)
     max_cap = params.get("max_market_cap", 5000)
@@ -33,9 +32,9 @@ def generate_main_force_markdown_report(analyzer, result):
 | **起始日期** | {start_date} |
 | **市值范围** | {min_cap}亿 - {max_cap}亿 |
 | **最大涨跌幅** | {max_change}% |
-| **初始数据量** | {result.get('total_fetched', 0)}只 |
-| **筛选后数量** | {result.get('filtered_count', 0)}只 |
-| **最终推荐** | {len(result.get('final_recommendations', []))}只 |
+| **初始数据量** | {len(analysis.raw_stocks)}只 |
+| **筛选后数量** | {len(analysis.filtered_stocks)}只 |
+| **最终推荐** | {len(analysis.recommendations)}只 |
 
 ---
 
@@ -44,33 +43,33 @@ def generate_main_force_markdown_report(analyzer, result):
 """
 
     # 添加资金流向分析
-    if hasattr(analyzer, "fund_flow_analysis") and analyzer.fund_flow_analysis:
+    if analysis.fund_flow_analysis:
         markdown_content += f"""
 ### 💰 资金流向分析师
 
-{analyzer.fund_flow_analysis}
+{analysis.fund_flow_analysis}
 
 ---
 
 """
 
     # 添加行业板块分析
-    if hasattr(analyzer, "industry_analysis") and analyzer.industry_analysis:
+    if analysis.industry_analysis:
         markdown_content += f"""
 ### 📊 行业板块及市场热点分析师
 
-{analyzer.industry_analysis}
+{analysis.industry_analysis}
 
 ---
 
 """
 
     # 添加财务基本面分析
-    if hasattr(analyzer, "fundamental_analysis") and analyzer.fundamental_analysis:
+    if analysis.fundamental_analysis:
         markdown_content += f"""
 ### 📈 财务基本面分析师
 
-{analyzer.fundamental_analysis}
+{analysis.fundamental_analysis}
 
 ---
 
@@ -82,19 +81,23 @@ def generate_main_force_markdown_report(analyzer, result):
 
 """
 
-    final_recommendations = result.get("final_recommendations", [])
-    if final_recommendations:
-        for rec in final_recommendations:
+    if analysis.recommendations:
+        for rec in analysis.recommendations:
+            # Construct reason text
+            reason_text = rec.highlights if rec.highlights else ""
+            if rec.reasons:
+                reason_text += "\n\n" + "\n".join([f"- {r}" for r in rec.reasons])
+            
             markdown_content += f"""
-### 【第{rec['rank']}名】{rec['symbol']} - {rec['name']}
+### 【第{rec.rank}名】{rec.symbol} - {rec.name}
 
 **推荐理由**:
-{rec.get('reason', '暂无')}
+{reason_text}
 
 **关键指标**:
 """
-            if "stock_data" in rec:
-                stock_data = rec["stock_data"]
+            if rec.stock_data:
+                stock_data = rec.stock_data
                 markdown_content += f"""
 - **所属行业**: {stock_data.get('industry', 'N/A')}
 - **市值**: {stock_data.get('market_cap', 'N/A')}
@@ -105,87 +108,57 @@ def generate_main_force_markdown_report(analyzer, result):
 
 """
 
-            if "scores" in rec.get("stock_data", {}):
-                scores = rec["stock_data"]["scores"]
+            if "scores" in rec.stock_data:
+                scores = rec.stock_data["scores"]
                 if scores:
                     markdown_content += "**能力评分**:\n"
                     for score_name, score_value in scores.items():
                         markdown_content += f"- {score_name}: {score_value}\n"
                     markdown_content += "\n"
+            
+            # Add Position and Period advice if available
+            if hasattr(rec, 'position') and rec.position:
+                markdown_content += f"**建议仓位**: {rec.position}\n\n"
+            if hasattr(rec, 'investment_period') and rec.investment_period:
+                markdown_content += f"**投资周期**: {rec.investment_period}\n\n"
 
             markdown_content += "---\n\n"
     else:
         markdown_content += "暂无推荐股票\n\n---\n\n"
 
     # 添加候选股票列表（前100名，按主力资金排序）
-    if analyzer and analyzer.raw_stocks is not None and not analyzer.raw_stocks.empty:
+    # Use filtered stocks or raw stocks? Usually raw stocks is better for full view, 
+    # but filtered stocks are the candidates. Let's use filtered_stocks if available, else raw_stocks.
+    # Actually, the user wants "Candidate List", which usually implies those who passed filters.
+    # But the old code used raw_stocks. Let's use raw_stocks but sorted.
+    candidate_stocks = analysis.raw_stocks
+    
+    if candidate_stocks:
         markdown_content += """
 ## 📋 候选股票完整列表（按主力资金净流入排序）
 
 """
+        # Sort by main_fund_inflow descending
+        sorted_stocks = sorted(candidate_stocks, key=lambda x: x.main_fund_inflow or -float('inf'), reverse=True)[:100]
+        
+        markdown_content += "| 序号 | 股票代码 | 股票名称 | 行业 | 主力净流入(万) | 涨跌幅(%) | 市值(亿) | 市盈率 | 市净率 |\n"
+        markdown_content += "|------|----------|----------|------|--------------|-----------|----------|--------|--------|\n"
+        
+        for idx, stock in enumerate(sorted_stocks, 1):
+            row_data = [
+                str(idx),
+                str(stock.symbol),
+                str(stock.name),
+                str(stock.industry),
+                f"{stock.main_fund_inflow:.2f}" if stock.main_fund_inflow is not None else "N/A",
+                f"{stock.range_change:.2f}" if stock.range_change is not None else "N/A",
+                f"{stock.market_cap:.2f}" if stock.market_cap is not None else "N/A",
+                f"{stock.pe_ratio:.2f}" if stock.pe_ratio is not None else "N/A",
+                f"{stock.pb_ratio:.2f}" if stock.pb_ratio is not None else "N/A"
+            ]
+            markdown_content += "| " + " | ".join(row_data) + " |\n"
 
-        # 获取主力资金列名
-        df = analyzer.raw_stocks
-        main_fund_col = None
-        main_fund_patterns = ["区间主力资金流向", "区间主力资金净流入", "主力资金流向", "主力资金净流入", "主力净流入"]
-        for pattern in main_fund_patterns:
-            matching = [col for col in df.columns if pattern in col]
-            if matching:
-                main_fund_col = matching[0]
-                break
-
-        # 按主力资金排序
-        if main_fund_col:
-            df_sorted = df.copy()
-            df_sorted[main_fund_col] = pd.to_numeric(df_sorted[main_fund_col], errors="coerce")
-            df_sorted = df_sorted.sort_values(by=main_fund_col, ascending=False).head(100)
-        else:
-            df_sorted = df.head(100)
-
-        # 选择要显示的列
-        display_cols = []
-        if "股票代码" in df_sorted.columns:
-            display_cols.append("股票代码")
-        if "股票简称" in df_sorted.columns:
-            display_cols.append("股票简称")
-
-        # 行业
-        industry_cols = [col for col in df_sorted.columns if "行业" in col]
-        if industry_cols:
-            display_cols.append(industry_cols[0])
-
-        # 主力资金
-        if main_fund_col:
-            display_cols.append(main_fund_col)
-
-        # 涨跌幅
-        change_cols = [col for col in df_sorted.columns if "涨跌幅" in col]
-        if change_cols:
-            display_cols.append(change_cols[0])
-
-        # 市值、市盈率、市净率
-        for col_name in ["总市值", "市盈率", "市净率"]:
-            matching_cols = [col for col in df_sorted.columns if col_name in col]
-            if matching_cols:
-                display_cols.append(matching_cols[0])
-
-        # 生成表格
-        if display_cols:
-            final_display_cols = [col for col in display_cols if col in df_sorted.columns]
-            markdown_content += "| 序号 | " + " | ".join(final_display_cols) + " |\n"
-            markdown_content += "|------|" + "|".join(["-----" for _ in final_display_cols]) + "|\n"
-
-            for idx, (_, row) in enumerate(df_sorted[final_display_cols].iterrows(), 1):
-                row_data = [str(idx)]
-                for col in final_display_cols:
-                    value = row[col]
-                    if pd.isna(value):
-                        row_data.append("N/A")
-                    else:
-                        row_data.append(str(value))
-                markdown_content += "| " + " | ".join(row_data) + " |\n"
-
-            markdown_content += "\n"
+        markdown_content += "\n"
 
     # 添加免责声明
     markdown_content += f"""
@@ -198,7 +171,7 @@ def generate_main_force_markdown_report(analyzer, result):
 ---
 
 *报告生成时间: {current_time}*  
-*主力选股AI分析系统 v1.0*
+*主力选股AI分析系统 v2.0*
 """
 
     return markdown_content
@@ -374,7 +347,7 @@ def create_html_download_link(content, filename, link_text):
     return href
 
 
-def display_report_download_section(analyzer, result):
+def display_report_download_section(analysis: MainForceAnalysis):
     """显示报告下载区域"""
 
     st.markdown("---")
@@ -387,7 +360,7 @@ def display_report_download_section(analyzer, result):
         st.caption("适合编辑和进一步处理")
 
         # 生成Markdown报告
-        markdown_content = generate_main_force_markdown_report(analyzer, result)
+        markdown_content = generate_main_force_markdown_report(analysis)
 
         # 生成文件名
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -419,23 +392,29 @@ def display_report_download_section(analyzer, result):
         st.info("💡 HTML报告可以直接在浏览器中打开，格式美观易读")
 
     # 添加CSV下载（候选股票列表）
-    if analyzer and analyzer.raw_stocks is not None and not analyzer.raw_stocks.empty:
+    if analysis.raw_stocks:
         st.markdown("---")
         st.markdown("#### 📊 候选股票数据")
 
+        # 转换为DataFrame
+        data = []
+        for stock in analysis.raw_stocks:
+            data.append({
+                "股票代码": stock.symbol,
+                "股票名称": stock.name,
+                "所属行业": stock.industry,
+                "总市值(亿)": stock.market_cap,
+                "区间涨跌幅(%)": stock.range_change,
+                "主力净流入(万)": stock.main_fund_inflow,
+                "市盈率": stock.pe_ratio,
+                "市净率": stock.pb_ratio
+            })
+        
+        df = pd.DataFrame(data)
+        
         # 按主力资金排序
-        df = analyzer.raw_stocks.copy()
-        main_fund_col = None
-        main_fund_patterns = ["区间主力资金流向", "区间主力资金净流入", "主力资金流向", "主力资金净流入", "主力净流入"]
-        for pattern in main_fund_patterns:
-            matching = [col for col in df.columns if pattern in col]
-            if matching:
-                main_fund_col = matching[0]
-                break
-
-        if main_fund_col:
-            df[main_fund_col] = pd.to_numeric(df[main_fund_col], errors="coerce")
-            df = df.sort_values(by=main_fund_col, ascending=False)
+        if "主力净流入(万)" in df.columns:
+             df = df.sort_values(by="主力净流入(万)", ascending=False)
 
         # 导出为CSV
         csv = df.to_csv(index=False, encoding="utf-8-sig")
@@ -444,3 +423,6 @@ def display_report_download_section(analyzer, result):
         st.download_button(
             label="📥 下载候选股票CSV", data=csv, file_name=csv_filename, mime="text/csv", width="content"
         )
+
+# Alias for compatibility
+generate_main_force_report = generate_main_force_markdown_report

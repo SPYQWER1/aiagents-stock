@@ -4,7 +4,7 @@ from unittest.mock import Mock, MagicMock
 from aiagents_stock.infrastructure.ai.orchestrator import DeepSeekAnalysisOrchestrator
 from aiagents_stock.domain.analysis.model import StockAnalysis, StockInfo, AgentRole
 from aiagents_stock.domain.analysis.dto import StockDataBundle
-from aiagents_stock.domain.analysis.ports import LLMClient
+from aiagents_stock.domain.ai.ports import LLMClient
 
 class MockLLMClient(LLMClient):
     def __init__(self):
