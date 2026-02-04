@@ -40,7 +40,7 @@ class LowPriceBullSelector:
             (success, dataframe, message)
         """
         try:
-            self.logger.info(f"🐂 低价擒牛选股 - 数据获取中")
+            self.logger.info("🐂 低价擒牛选股 - 数据获取中")
             self.logger.info("策略: 股价<10元 + 净利润增长率≥100% + 沪深A股")
             self.logger.info(f"目标: 筛选前{top_n}只股票")
 

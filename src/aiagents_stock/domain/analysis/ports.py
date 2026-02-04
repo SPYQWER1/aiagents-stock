@@ -19,6 +19,7 @@ from aiagents_stock.domain.analysis.dto import (
     StockDataBundle,
     StockRequest,
 )
+from aiagents_stock.domain.analysis.model import StockAnalysis
 
 
 class MarketDataProvider(Protocol):
@@ -73,7 +74,6 @@ class AIAnalyzer(Protocol):
         """执行分析。"""
 
 
-from aiagents_stock.domain.analysis.model import StockAnalysis
 
 class StockAnalysisRepository(Protocol):
     """

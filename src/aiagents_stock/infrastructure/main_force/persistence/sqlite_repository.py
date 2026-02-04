@@ -1,18 +1,30 @@
 import json
-import sqlite3
 import os
-from datetime import datetime
-from typing import List, Dict, Any, Optional
+import sqlite3
 from dataclasses import asdict
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from aiagents_stock.domain.main_force.model import MainForceAnalysis, MainForceStock, MainForceRecommendation
+from aiagents_stock.domain.main_force.model import MainForceAnalysis, MainForceRecommendation
 from aiagents_stock.domain.main_force.ports import MainForceAnalysisRepository
+
+
+def get_default_db_path() -> str:
+    """获取默认数据库路径（基于项目根目录）"""
+    # src/aiagents_stock/infrastructure/main_force/persistence/sqlite_repository.py -> ... -> project_root
+    current_dir = Path(__file__).resolve().parent
+    project_root = current_dir.parent.parent.parent.parent.parent
+    return str(project_root / "database_files" / "main_force_analysis.db")
 
 class SqliteMainForceAnalysisRepository(MainForceAnalysisRepository):
     """基于 SQLite 的主力选股分析仓储"""
     
-    def __init__(self, db_path: str = os.path.join("database_files", "main_force_analysis.db")):
-        self.db_path = db_path
+    def __init__(self, db_path: str = None):
+        if db_path is None:
+            self.db_path = get_default_db_path()
+        else:
+            self.db_path = db_path
         self._init_db()
         
     def _init_db(self):
@@ -86,7 +98,7 @@ class SqliteMainForceAnalysisRepository(MainForceAnalysisRepository):
         try:
             recommendations_data = json.loads(row[8])
             recommendations = [MainForceRecommendation(**r) for r in recommendations_data]
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError):
             recommendations = []
             
         return MainForceAnalysis(
@@ -122,15 +134,6 @@ class SqliteMainForceAnalysisRepository(MainForceAnalysisRepository):
         except Exception as e:
             print(f"Delete failed: {e}")
             return False
-
-    def delete(self, record_id: int) -> bool:
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM batch_analysis_history WHERE id = ?", (record_id,))
-        affected = cursor.rowcount
-        conn.commit()
-        conn.close()
-        return affected > 0
 
     def get_statistics(self) -> Dict:
         conn = sqlite3.connect(self.db_path)

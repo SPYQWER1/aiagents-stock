@@ -2,15 +2,27 @@ import json
 import logging
 import os
 import sqlite3
+from pathlib import Path
 from typing import Dict, List, Optional
+
+
+def get_default_db_path() -> str:
+    """获取默认数据库路径（基于项目根目录）"""
+    # src/aiagents_stock/features/monitor/monitor_db.py -> ... -> project_root
+    current_dir = Path(__file__).resolve().parent
+    project_root = current_dir.parent.parent.parent.parent
+    return str(project_root / "database_files" / "stock_monitor.db")
 
 
 class StockMonitorDatabase:
     """股票监测数据库管理类"""
 
-    def __init__(self, db_path: str = os.path.join("database_files", "stock_monitor.db")):
+    def __init__(self, db_path: str = None):
         self.logger = logging.getLogger(__name__)
-        self.db_path = db_path
+        if db_path is None:
+            self.db_path = get_default_db_path()
+        else:
+            self.db_path = db_path
         # 确保数据库所在目录存在
         db_dir = os.path.dirname(self.db_path)
         if db_dir and not os.path.exists(db_dir):

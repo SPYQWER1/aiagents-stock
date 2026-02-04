@@ -8,20 +8,32 @@ import logging
 import os
 import sqlite3
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List
+
+
+def get_default_db_path() -> str:
+    """获取默认数据库路径（基于项目根目录）"""
+    # src/aiagents_stock/features/smart_monitor/smart_monitor_db.py -> ... -> project_root
+    current_dir = Path(__file__).resolve().parent
+    project_root = current_dir.parent.parent.parent.parent
+    return str(project_root / "database_files" / "smart_monitor.db")
 
 
 class SmartMonitorDB:
     """智能盯盘数据库"""
 
-    def __init__(self, db_file: str = os.path.join("database_files", "smart_monitor.db")):
+    def __init__(self, db_file: str = None):
         """
         初始化数据库
 
         Args:
             db_file: 数据库文件路径
         """
-        self.db_file = db_file
+        if db_file is None:
+            self.db_file = get_default_db_path()
+        else:
+            self.db_file = db_file
         db_dir = os.path.dirname(self.db_file)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir, exist_ok=True)

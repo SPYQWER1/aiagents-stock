@@ -215,6 +215,7 @@ APP_CSS = """
     /* 隐藏Streamlit默认元素 */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    [data-testid="stSidebarNav"] {display: none;}
 
     /* 响应式设计 */
     @media (max-width: 768px) {

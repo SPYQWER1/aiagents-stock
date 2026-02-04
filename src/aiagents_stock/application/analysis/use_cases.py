@@ -10,8 +10,8 @@ import concurrent.futures
 from dataclasses import dataclass
 from typing import Any, Iterator
 
-from aiagents_stock.domain.analysis.dto import  AnalysisResult, StockDataBundle, StockRequest
-from aiagents_stock.domain.analysis.model import StockAnalysis, StockInfo, AgentRole
+from aiagents_stock.domain.analysis.dto import AnalysisResult, StockDataBundle, StockRequest
+from aiagents_stock.domain.analysis.model import AgentRole, StockAnalysis, StockInfo
 from aiagents_stock.domain.analysis.ports import (
     AIAnalyzer,
     MarketDataProvider,

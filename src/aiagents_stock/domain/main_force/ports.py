@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Dict, Any, Optional
-from aiagents_stock.domain.main_force.model import MainForceAnalysis, MainForceStock, MainForceRecommendation
+from typing import Any, Dict, List, Optional, Tuple
+
+from aiagents_stock.domain.main_force.model import MainForceAnalysis, MainForceRecommendation, MainForceStock
+
 
 class MainForceProvider(ABC):
     """主力资金数据提供者接口"""

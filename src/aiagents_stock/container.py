@@ -11,34 +11,29 @@
 
 from __future__ import annotations
 
-import os
 import logging
 from typing import Optional
 
+from aiagents_stock.application.analysis.use_cases import (
+    AnalyzeSingleStockUseCase,
+    BatchAnalyzeStocksUseCase,
+    GetBatchAnalysisHistoryUseCase,
+    SaveBatchAnalysisResultUseCase,
+)
+from aiagents_stock.application.main_force.use_cases import AnalyzeMainForceUseCase, GetMainForceHistoryUseCase
 from aiagents_stock.core.config_manager import config_manager
 from aiagents_stock.db.database import StockAnalysisDatabase
 from aiagents_stock.infrastructure.adapters.market_data_provider import AkshareMarketDataProvider
 from aiagents_stock.infrastructure.adapters.optional_data_provider import DefaultOptionalDataProvider
 from aiagents_stock.infrastructure.ai.deepseek_client import DeepSeekClient
 from aiagents_stock.infrastructure.ai.orchestrator import DeepSeekAnalysisOrchestrator
-from aiagents_stock.infrastructure.persistence.sqlite.analysis_repository import SqliteStockAnalysisRepository
-from aiagents_stock.infrastructure.analysis.persistence.sqlite_batch_repository import SqliteStockBatchAnalysisRepository
-from aiagents_stock.domain.analysis.services import AnalysisOrchestrator
-from aiagents_stock.application.analysis.use_cases import (
-    AnalyzeSingleStockUseCase,
-    BatchAnalyzeStocksUseCase,
-    SaveBatchAnalysisResultUseCase,
-    GetBatchAnalysisHistoryUseCase
+from aiagents_stock.infrastructure.analysis.persistence.sqlite_batch_repository import (
+    SqliteStockBatchAnalysisRepository,
 )
-from aiagents_stock.application.main_force.use_cases import (
-    AnalyzeMainForceUseCase,
-    GetMainForceHistoryUseCase
-)
-from aiagents_stock.infrastructure.main_force.persistence.sqlite_repository import (
-    SqliteMainForceAnalysisRepository
-)
-from aiagents_stock.infrastructure.main_force.provider.pywencai_provider import PyWencaiMainForceProvider
 from aiagents_stock.infrastructure.main_force.ai_analyzer import DeepSeekMainForceAIAnalyzer
+from aiagents_stock.infrastructure.main_force.persistence.sqlite_repository import SqliteMainForceAnalysisRepository
+from aiagents_stock.infrastructure.main_force.provider.pywencai_provider import PyWencaiMainForceProvider
+from aiagents_stock.infrastructure.persistence.sqlite.analysis_repository import SqliteStockAnalysisRepository
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +49,6 @@ class DIContainer:
     _llm_client: Optional[DeepSeekClient] = None
     
     # --- Main Force Singletons ---
-    _main_force_batch_repo: Optional[SqliteMainForceBatchRepository] = None
     _main_force_repo: Optional[SqliteMainForceAnalysisRepository] = None
     _main_force_provider: Optional[PyWencaiMainForceProvider] = None
 

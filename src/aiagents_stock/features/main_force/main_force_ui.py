@@ -9,14 +9,15 @@
 5. 跳转至历史记录
 """
 
-import streamlit as st
 import pandas as pd
+import streamlit as st
 
 from aiagents_stock.container import DIContainer
+from aiagents_stock.domain.main_force.model import MainForceAnalysis
 from aiagents_stock.features.main_force.main_force_history_ui import display_selection_history
 from aiagents_stock.features.main_force.main_force_pdf_generator import display_report_download_section
-from aiagents_stock.domain.main_force.model import MainForceAnalysis
 from aiagents_stock.web.navigation import View, set_current_view
+
 
 def _clean_stock_code(code: str) -> str:
     """清理股票代码，移除后缀（如 .SH, .SZ）"""

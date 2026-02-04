@@ -8,21 +8,33 @@ import logging
 import os
 import sqlite3
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
+
+
+def get_default_db_path() -> str:
+    """获取默认数据库路径（基于项目根目录）"""
+    # src/aiagents_stock/features/sector_strategy/sector_strategy_db.py -> ... -> project_root
+    current_dir = Path(__file__).resolve().parent
+    project_root = current_dir.parent.parent.parent.parent
+    return str(project_root / "database_files" / "sector_strategy.db")
 
 
 class SectorStrategyDatabase:
     """智策板块数据库管理类"""
 
-    def __init__(self, db_path=os.path.join("database_files", "sector_strategy.db")):
+    def __init__(self, db_path=None):
         """
         初始化数据库
 
         Args:
             db_path: 数据库文件路径
         """
-        self.db_path = db_path
+        if db_path is None:
+            self.db_path = get_default_db_path()
+        else:
+            self.db_path = db_path
         db_dir = os.path.dirname(self.db_path)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir, exist_ok=True)

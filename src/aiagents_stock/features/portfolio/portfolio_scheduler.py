@@ -4,9 +4,9 @@
 提供定时任务调度功能，在设定时间自动执行持仓批量分析
 """
 
+import logging
 import threading
 import time
-import traceback
 from datetime import datetime
 from typing import Optional
 

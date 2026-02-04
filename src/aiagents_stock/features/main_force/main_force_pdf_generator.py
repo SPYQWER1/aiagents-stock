@@ -1,9 +1,12 @@
 import base64
 import re
 from datetime import datetime
+
 import pandas as pd
 import streamlit as st
+
 from aiagents_stock.domain.main_force.model import MainForceAnalysis
+
 
 def generate_main_force_markdown_report(analysis: MainForceAnalysis):
     """生成主力选股Markdown格式的分析报告"""

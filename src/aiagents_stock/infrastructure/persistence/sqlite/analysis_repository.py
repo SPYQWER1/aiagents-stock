@@ -7,12 +7,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from typing import Any, Dict
+from dataclasses import asdict, dataclass
 
 from aiagents_stock.db.database import StockAnalysisDatabase
+from aiagents_stock.domain.analysis.model import AgentRole, AnalysisContent, StockAnalysis, StockInfo
 from aiagents_stock.domain.analysis.ports import StockAnalysisRepository
-from aiagents_stock.domain.analysis.model import StockAnalysis, StockInfo, AgentRole, AgentReview, AnalysisContent
+
 
 @dataclass(frozen=True)
 class SqliteStockAnalysisRepository(StockAnalysisRepository):

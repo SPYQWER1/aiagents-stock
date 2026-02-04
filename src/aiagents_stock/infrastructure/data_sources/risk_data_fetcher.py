@@ -6,9 +6,9 @@
 3. 近期重要事件
 """
 
+import logging
 import os
 import time
-import logging
 import warnings
 from typing import Any, Dict
 

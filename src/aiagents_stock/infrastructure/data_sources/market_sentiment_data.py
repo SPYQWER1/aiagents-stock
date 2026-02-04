@@ -4,8 +4,8 @@
 """
 
 import io
-import sys
 import logging
+import sys
 import warnings
 from datetime import datetime, timedelta
 
@@ -483,7 +483,7 @@ class MarketSentimentDataFetcher:
                 except Exception as te:
                     error_msg = str(te)
                     if "权限" in error_msg:
-                         logger.warning(f"   [Tushare] ❌ 获取失败: 接口权限不足 (请检查 Tushare 积分: https://tushare.pro/document/1?doc_id=108)")
+                         logger.warning("   [Tushare] ❌ 获取失败: 接口权限不足 (请检查 Tushare 积分: https://tushare.pro/document/1?doc_id=108)")
                     else:
                         logger.error(f"   [Tushare] ❌ 获取失败: {te}", exc_info=True)
 

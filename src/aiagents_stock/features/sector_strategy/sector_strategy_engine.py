@@ -10,9 +10,9 @@ from typing import Any, Dict
 
 import pandas as pd
 
-from aiagents_stock.infrastructure.ai.deepseek_client import DeepSeekClient
 from aiagents_stock.features.sector_strategy.sector_strategy_agents import SectorStrategyAgents
 from aiagents_stock.features.sector_strategy.sector_strategy_db import SectorStrategyDatabase
+from aiagents_stock.infrastructure.ai.deepseek_client import DeepSeekClient
 
 
 class SectorStrategyEngine:

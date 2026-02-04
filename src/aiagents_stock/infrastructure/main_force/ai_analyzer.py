@@ -1,8 +1,9 @@
-from typing import List, Dict, Any
 import json
 import logging
 import re
-from aiagents_stock.domain.main_force.model import MainForceStock, MainForceRecommendation
+from typing import Any, Dict, List
+
+from aiagents_stock.domain.main_force.model import MainForceRecommendation, MainForceStock
 from aiagents_stock.domain.main_force.ports import MainForceAIAnalyzer
 from aiagents_stock.infrastructure.ai.deepseek_client import DeepSeekClient
 

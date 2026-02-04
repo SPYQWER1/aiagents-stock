@@ -3,6 +3,7 @@
 对龙虎榜上榜股票进行综合评分排名
 """
 
+import logging
 from typing import Dict, List
 
 import pandas as pd

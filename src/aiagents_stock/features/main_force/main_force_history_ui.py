@@ -1,8 +1,11 @@
 import json
+
 import pandas as pd
 import streamlit as st
+
 from aiagents_stock.container import DIContainer
 from aiagents_stock.web.navigation import View, set_current_view
+
 
 def display_selection_history():
     """显示主力选股历史记录"""
@@ -37,7 +40,7 @@ def _display_selection_history():
             try:
                 recs = json.loads(record["recommendations"]) if isinstance(record["recommendations"], str) else record["recommendations"]
                 rec_count = len(recs)
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 recs = []
                 rec_count = 0
                 

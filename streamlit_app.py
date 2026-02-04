@@ -1,5 +1,8 @@
 """
-Streamlit 应用入口，供本地和 Docker 部署统一使用。
+Streamlit 应用云端部署入口 (Entry point for Streamlit Cloud/Docker)
+
+该文件主要用于 Streamlit Cloud 或其他云平台部署时的入口识别。
+本地开发建议使用 `python run.py` 启动，包含完整的环境检查。
 """
 
 import os

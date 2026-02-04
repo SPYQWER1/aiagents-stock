@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 from typing import Any, Iterator
+
 import streamlit as st
 
-from aiagents_stock.application.analysis.use_cases import BatchAnalyzeStocksRequest, BatchAnalysisItemResult
+from aiagents_stock.application.analysis.use_cases import BatchAnalysisItemResult, BatchAnalyzeStocksRequest
+from aiagents_stock.container import DIContainer
 from aiagents_stock.domain.analysis.dto import (
     FundFlowData,
     NewsData,
@@ -17,7 +20,6 @@ from aiagents_stock.web.config import (
     CACHE_TTL_STOCK_DATA_SECONDS,
     EnabledAnalysts,
 )
-from aiagents_stock.container import DIContainer
 
 
 def check_api_key() -> bool:
@@ -25,31 +27,31 @@ def check_api_key() -> bool:
     return DIContainer.check_api_key()
 
 
-@st.cache_data(ttl=CACHE_TTL_STOCK_DATA_SECONDS)
+@st.cache_resource(ttl=CACHE_TTL_STOCK_DATA_SECONDS)
 def get_stock_data(symbol: str, period: str) -> StockDataBundle:
     """UI 专用的数据代理：带 Streamlit 缓存。"""
     return DIContainer.get_market_data_provider().get_stock_data_bundle(symbol=symbol, period=period)
 
 
-@st.cache_data(ttl=CACHE_TTL_OPTIONAL_DATA_SECONDS)
+@st.cache_resource(ttl=CACHE_TTL_OPTIONAL_DATA_SECONDS)
 def get_financial_data(symbol: str) -> Any:
     """获取财务数据（带缓存）。"""
     return DIContainer.get_market_data_provider().get_financial_data(symbol=symbol)
 
 
-@st.cache_data(ttl=CACHE_TTL_OPTIONAL_DATA_SECONDS)
+@st.cache_resource(ttl=CACHE_TTL_OPTIONAL_DATA_SECONDS)
 def get_quarterly_data(symbol: str) -> QuarterlyData | None:
     """获取季报数据（仅 A 股，带缓存）。"""
     return DIContainer.get_optional_data_provider().get_quarterly_data(symbol=symbol)
 
 
-@st.cache_data(ttl=CACHE_TTL_OPTIONAL_DATA_SECONDS)
+@st.cache_resource(ttl=CACHE_TTL_OPTIONAL_DATA_SECONDS)
 def get_fund_flow_data(symbol: str) -> FundFlowData | None:
     """获取资金流向数据（仅 A 股，带缓存）。"""
     return DIContainer.get_optional_data_provider().get_fund_flow_data(symbol=symbol)
 
 
-@st.cache_data(ttl=CACHE_TTL_OPTIONAL_DATA_SECONDS)
+@st.cache_resource(ttl=CACHE_TTL_OPTIONAL_DATA_SECONDS)
 def get_sentiment_data(symbol: str, period: str) -> SentimentData | None:
     """获取市场情绪数据（仅 A 股，带缓存）。"""
     # 情绪分析需要K线数据作为上下文
@@ -62,13 +64,13 @@ def get_sentiment_data(symbol: str, period: str) -> SentimentData | None:
     )
 
 
-@st.cache_data(ttl=CACHE_TTL_OPTIONAL_DATA_SECONDS)
+@st.cache_resource(ttl=CACHE_TTL_OPTIONAL_DATA_SECONDS)
 def get_news_data(symbol: str) -> NewsData | None:
     """获取新闻数据（仅 A 股，带缓存）。"""
     return DIContainer.get_optional_data_provider().get_news_data(symbol=symbol)
 
 
-@st.cache_data(ttl=CACHE_TTL_OPTIONAL_DATA_SECONDS)
+@st.cache_resource(ttl=CACHE_TTL_OPTIONAL_DATA_SECONDS)
 def get_risk_data(symbol: str) -> RiskData | None:
     """获取风险数据（仅 A 股，带缓存）。"""
     return DIContainer.get_optional_data_provider().get_risk_data(symbol=symbol)
@@ -100,8 +102,7 @@ def analyze_single_stock_via_use_case(
         dict: 便于表现层渲染的结构化结果
     """
     use_case = DIContainer.create_analyze_single_stock_use_case(
-        model=selected_model,
-        use_cache=use_cached_agents
+        model=selected_model
     )
 
     response = use_case.execute(

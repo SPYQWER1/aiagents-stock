@@ -4,9 +4,11 @@ LLM 客户端适配器。
 
 from __future__ import annotations
 
-from typing import List, Dict, Any
+from typing import Dict, List
+
 from aiagents_stock.domain.ai.ports import LLMClient
 from aiagents_stock.infrastructure.ai.deepseek_client import DeepSeekClient
+
 
 class DeepSeekLLMAdapter(LLMClient):
     """

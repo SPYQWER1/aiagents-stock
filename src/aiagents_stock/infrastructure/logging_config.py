@@ -1,9 +1,10 @@
+import logging
 import os
 import sys
-import logging
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
-from typing import Optional
+
+_LOGGING_INITIALIZED = False
 
 def setup_logging(
     log_dir: str = "logs",
@@ -24,6 +25,10 @@ def setup_logging(
         backup_count: 保留的旧日志文件数量
         rotation_type: 轮转类型，"size" 按大小，"time" 按日期
     """
+    global _LOGGING_INITIALIZED
+    if _LOGGING_INITIALIZED:
+        return
+
     # 确保日志目录存在
     log_path = Path(log_dir)
     log_path.mkdir(parents=True, exist_ok=True)
@@ -84,7 +89,9 @@ def setup_logging(
     logging.getLogger("pdfminer").setLevel(logging.WARNING)
 
     # 记录日志系统初始化完成
-    logging.info(f"Logging initialized. Log file: {log_file}")
+    if os.getenv("AIAGENTS_LOG_INIT_SILENT") != "1":
+        logging.info(f"Logging initialized. Log file: {log_file}")
+    _LOGGING_INITIALIZED = True
 
 def get_logger(name: str) -> logging.Logger:
     """

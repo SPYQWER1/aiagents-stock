@@ -5,6 +5,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from aiagents_stock.web.adapters.analysis_adapter import get_stock_data
 from aiagents_stock.web.components.analysis_display import (
     display_agents_analysis,
     display_final_decision,
@@ -12,7 +13,6 @@ from aiagents_stock.web.components.analysis_display import (
     display_stock_info,
     display_team_discussion,
 )
-from aiagents_stock.web.adapters.analysis_adapter import get_stock_data
 
 
 def display_batch_analysis_results(results: list[dict[str, Any]], period: str) -> None:

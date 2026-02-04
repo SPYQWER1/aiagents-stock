@@ -1,7 +1,8 @@
 """
 AI Domain Ports.
 """
-from typing import Protocol, List, Dict, Any, Optional
+from typing import Dict, List, Optional, Protocol
+
 
 class LLMClient(Protocol):
     """

@@ -4,16 +4,16 @@
 PyWencai主力资金数据提供者实现
 """
 
-import time
 import logging
+import time
 from datetime import datetime, timedelta
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple
 
 import pandas as pd
 import pywencai
 
-from aiagents_stock.domain.main_force.ports import MainForceProvider
 from aiagents_stock.domain.main_force.model import MainForceStock
+from aiagents_stock.domain.main_force.ports import MainForceProvider
 
 logger = logging.getLogger(__name__)
 
@@ -284,12 +284,12 @@ class PyWencaiMainForceProvider(MainForceProvider):
                 if '亿' in val:
                     try:
                         return float(val.replace('亿', '')) * 100000000
-                    except:
+                    except (ValueError, TypeError):
                         return 0.0
                 elif '万' in val:
                     try:
                         return float(val.replace('万', '')) * 10000
-                    except:
+                    except (ValueError, TypeError):
                         return 0.0
             return val
             

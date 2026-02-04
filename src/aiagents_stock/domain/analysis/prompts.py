@@ -299,4 +299,19 @@ FINAL_DECISION_PROMPT = """
     "confidence_level": "信心度(1-10分)"
 }}
 """
+JSON_FIX_PROMPT = """
+你是一个 JSON 格式修复专家。之前的输出因为格式错误无法被解析。
 
+错误信息：
+{error_message}
+
+原始错误输出：
+{raw_output}
+
+请修复上述输出中的 JSON 格式错误，并只输出修正后的 JSON 内容。
+注意：
+1. 不要包含 markdown 代码块标记（如 ```json ... ```）。
+2. 确保所有键和字符串值都使用双引号。
+3. 确保 JSON 结构完整且合法。
+4. 只输出 JSON 字符串，不要输出任何其他解释性文字。
+"""

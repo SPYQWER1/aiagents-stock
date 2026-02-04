@@ -6,8 +6,21 @@
 
 from __future__ import annotations
 
-from typing import Protocol, Any, Dict, List
-from aiagents_stock.domain.analysis.model import StockAnalysis, AgentRole
+from typing import Any, List, Optional, Protocol
+
+from aiagents_stock.domain.analysis.dto import StockDataBundle
+from aiagents_stock.domain.analysis.model import AgentRole, AnalysisContent, StockAnalysis, StockInfo
+
+
+class AnalysisAgent(Protocol):
+    """
+    单个分析智能体的接口。
+    """
+    role: AgentRole
+    
+    def analyze(self, stock_info: StockInfo, data_bundle: StockDataBundle) -> Optional[AnalysisContent]:
+        """执行分析并返回分析内容"""
+        ...
 
 class AnalysisOrchestrator(Protocol):
     """

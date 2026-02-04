@@ -4,8 +4,8 @@
 """
 
 import io
-import sys
 import logging
+import sys
 import warnings
 from datetime import datetime
 

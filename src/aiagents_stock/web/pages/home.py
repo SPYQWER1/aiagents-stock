@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import json
 import time
-import pandas as pd
 from typing import Any
 
+import pandas as pd
 import streamlit as st
 
 from aiagents_stock.container import DIContainer
-from aiagents_stock.application.analysis.use_cases import BatchAnalysisItemResult
+from aiagents_stock.web.adapters.analysis_adapter import (
+    analyze_batch_stocks_via_use_case,
+    analyze_single_stock_via_use_case,
+    get_financial_data,
+    get_stock_data,
+)
 from aiagents_stock.web.components.analysis_display import (
     display_agents_analysis,
     display_final_decision,
@@ -21,12 +26,6 @@ from aiagents_stock.web.config import (
     BATCH_TIMEOUT_SECONDS,
     MAX_BATCH_STOCKS_RECOMMENDED,
     EnabledAnalysts,
-)
-from aiagents_stock.web.adapters.analysis_adapter import (
-    analyze_batch_stocks_via_use_case,
-    analyze_single_stock_via_use_case,
-    get_financial_data,
-    get_stock_data,
 )
 from aiagents_stock.web.utils.parsers import parse_stock_list
 from aiagents_stock.web.utils.session_state import reset_all_analysis_state, reset_batch_analysis_state
@@ -401,7 +400,7 @@ def _display_batch_history():
                     results_data = json.loads(record["results"])
                 else:
                     results_data = record["results"]
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 results_data = []
             
             success_rate = (record['success_count'] / record['batch_count'] * 100) if record['batch_count'] > 0 else 0

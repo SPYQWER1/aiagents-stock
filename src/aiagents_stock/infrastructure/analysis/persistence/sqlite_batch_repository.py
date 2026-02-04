@@ -2,18 +2,29 @@ import json
 import logging
 import os
 import sqlite3
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from aiagents_stock.domain.analysis.ports import StockBatchAnalysisRepository
 
 logger = logging.getLogger(__name__)
 
+def get_default_db_path() -> str:
+    """获取默认数据库路径（基于项目根目录）"""
+    # src/aiagents_stock/infrastructure/analysis/persistence/sqlite_batch_repository.py -> ... -> project_root
+    current_dir = Path(__file__).resolve().parent
+    project_root = current_dir.parent.parent.parent.parent.parent
+    return str(project_root / "database_files" / "stock_batch_analysis.db")
+
 
 class SqliteStockBatchAnalysisRepository(StockBatchAnalysisRepository):
     """基于 SQLite 的股票批量分析历史仓储"""
 
-    def __init__(self, db_path: str = os.path.join("database_files", "stock_batch_analysis.db")):
-        self.db_path = db_path
+    def __init__(self, db_path: str = None):
+        if db_path is None:
+            self.db_path = get_default_db_path()
+        else:
+            self.db_path = db_path
         self._init_db()
 
     def _init_db(self):
@@ -118,7 +129,7 @@ class SqliteStockBatchAnalysisRepository(StockBatchAnalysisRepository):
                 record = dict(row)
                 try:
                     record["results"] = json.loads(record["results_json"])
-                except:
+                except (json.JSONDecodeError, TypeError, ValueError):
                     record["results"] = []
                 history.append(record)
                 
@@ -144,7 +155,7 @@ class SqliteStockBatchAnalysisRepository(StockBatchAnalysisRepository):
                 # 解析 JSON 结果
                 try:
                     result["results"] = json.loads(result["results_json"])
-                except:
+                except (json.JSONDecodeError, TypeError, ValueError):
                     result["results"] = []
                 return result
             return None

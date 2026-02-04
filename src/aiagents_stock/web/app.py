@@ -25,12 +25,13 @@ Streamlit 应用主入口
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
-import logging
 
 import streamlit as st
+
 from aiagents_stock.infrastructure.logging_config import setup_logging
 
 # 初始化日志
@@ -182,7 +183,7 @@ def main() -> None:
     except Exception as exc:
         # 显示错误信息
         st.error("❌ 页面渲染失败，请刷新或检查配置。")
-        with st.expander("错误详情"):
+        with st.expander("错误详情"):  
             st.exception(exc)
 
 

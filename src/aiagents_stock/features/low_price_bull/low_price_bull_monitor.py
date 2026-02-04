@@ -9,15 +9,24 @@ import logging
 import os
 import sqlite3
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 import pandas as pd
 
 
+def get_default_db_path() -> str:
+    """获取默认数据库路径（基于项目根目录）"""
+    # src/aiagents_stock/features/low_price_bull/low_price_bull_monitor.py -> ... -> project_root
+    current_dir = Path(__file__).resolve().parent
+    project_root = current_dir.parent.parent.parent.parent
+    return str(project_root / "database_files" / "low_price_bull_monitor.db")
+
+
 class LowPriceBullMonitor:
     """低价擒牛策略监控器"""
 
-    def __init__(self, db_path: str = os.path.join("database_files", "low_price_bull_monitor.db")):
+    def __init__(self, db_path: str = None):
         """
         初始化监控器
 
@@ -25,7 +34,10 @@ class LowPriceBullMonitor:
             db_path: 数据库文件路径
         """
         self.logger = logging.getLogger(__name__)
-        self.db_path = db_path
+        if db_path is None:
+            self.db_path = get_default_db_path()
+        else:
+            self.db_path = db_path
         db_dir = os.path.dirname(self.db_path)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir, exist_ok=True)

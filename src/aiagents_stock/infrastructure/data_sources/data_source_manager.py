@@ -3,11 +3,11 @@
 实现akshare和tushare的自动切换机制
 """
 
+import logging
 import os
 import time
-import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
@@ -391,7 +391,7 @@ class DataSourceManager:
 
             return info
 
-        except Exception as e:
+        except Exception:
             return {
                 "symbol": symbol,
                 "name": f"港股{symbol}",

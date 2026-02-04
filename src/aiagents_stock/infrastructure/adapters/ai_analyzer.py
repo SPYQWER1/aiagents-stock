@@ -7,17 +7,20 @@ AI 分析器基础设施实现。
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import List
 
 from aiagents_stock.domain.analysis.dto import AnalysisResult, StockDataBundle, StockRequest
+from aiagents_stock.domain.analysis.model import AgentRole, StockAnalysis, StockInfo
 from aiagents_stock.domain.analysis.ports import AIAnalyzer
-from aiagents_stock.infrastructure.ai.deepseek_agents import DeepSeekAnalyzer
+from aiagents_stock.infrastructure.ai.llm_client import DeepSeekLLMAdapter
+from aiagents_stock.infrastructure.ai.orchestrator import DeepSeekAnalysisOrchestrator
 
 
 @dataclass(frozen=True)
 class DeepSeekAIAnalyzer(AIAnalyzer):
     """
     基于 DeepSeek 的 AIAnalyzer 实现。
+    使用 DDD 架构：Adapter -> Orchestrator (Domain Service) -> LLMClient (Port)
     """
 
     def analyze(
@@ -27,38 +30,59 @@ class DeepSeekAIAnalyzer(AIAnalyzer):
         bundle: StockDataBundle,
     ) -> AnalysisResult:
         """
-        调用 DeepSeekAnalyzer 执行分析。
+        调用 DeepSeekAnalysisOrchestrator 执行分析。
         """
 
-        symbol = request.symbol
-        stock_info = bundle.stock_info
+        # 1. 转换请求为领域对象
+        stock_info = StockInfo.from_dict(bundle.stock_info)
+        analysis = StockAnalysis(stock_info=stock_info, period=request.period)
         
-        # 实例化 DeepSeekAnalyzer
-        # 注意：这里直接使用 request 中的 model
-        agents = DeepSeekAnalyzer(model=request.model)
+        # 2. 准备服务和适配器
+        llm_client = DeepSeekLLMAdapter(model=request.model)
+        orchestrator = DeepSeekAnalysisOrchestrator(llm_client=llm_client)
         
-        # 1. 运行多智能体分析
-        agents_results = agents.run_multi_agent_analysis(
-            stock_info=stock_info,
-            bundle=bundle,
-            enabled_analysts=request.enabled_analysts,
+        # 3. 确定启用的 Agent
+        enabled_agents: List[AgentRole] = []
+        if request.enabled_analysts:
+            for key, enabled in request.enabled_analysts.items():
+                if enabled:
+                    try:
+                        enabled_agents.append(AgentRole(key))
+                    except ValueError:
+                        pass # 忽略未知的角色
+
+        # 4. 执行分析 (使用编排器)
+        orchestrator.perform_analysis(
+            analysis=analysis,
+            data_bundle=bundle,
+            enabled_agents=enabled_agents
         )
 
-        # 2. 组织团队讨论
-        discussion_result = agents.conduct_team_discussion(
-            agents_results=agents_results,
-            stock_info=stock_info,
-        )
+        # 5. 将领域对象转换为 DTO 返回
+        return self._map_to_dto(analysis, bundle)
 
-        # 3. 生成最终决策
-        final_decision = agents.make_final_decision(
-            discussion_result=discussion_result,
-            stock_info=stock_info,
-            bundle=bundle,
-        )
+    def _map_to_dto(self, analysis: StockAnalysis, bundle: StockDataBundle) -> AnalysisResult:
+        """将 StockAnalysis 实体转换为 AnalysisResult DTO"""
+        
+        agents_results = {}
+        for role, review in analysis.reviews.items():
+            # 重构为前端期望的格式 (参考 deepseek_agents.py 的输出)
+            result_dict = {
+                "agent_name": review.agent_name,
+                "agent_role": role.value,
+                "analysis": review.content.raw_output, # 或者 use details['full_text']
+                "focus_areas": review.content.focus_areas,
+                "timestamp": review.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            
+            # 尝试回填一些数据字段，虽然 bundle 里有，但为了兼容性
+            # 注意：Orchestrator 没有在 Review 里存原始数据，这里如果需要只能从 bundle 取
+            # 但既然 bundle 传给了 UI，UI 应该直接用 bundle
+            
+            agents_results[role.value] = result_dict
 
         return AnalysisResult(
             agents_results=agents_results,
-            discussion_result=discussion_result,
-            final_decision=final_decision,
+            discussion_result=analysis.team_discussion,
+            final_decision=analysis.final_decision,
         )
